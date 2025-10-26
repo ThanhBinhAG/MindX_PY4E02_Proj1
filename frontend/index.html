@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎮 Steam Game Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #111827;
+      --bg-medium: #1f2937;
+      --bg-light: #374151;
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --accent-blue: #60a5fa;
+      --accent-green: #34d399;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      margin: 0;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      font-weight: 300;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    header {
+      padding: 16px 30px;
+      background: var(--bg-medium);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      border-bottom: 1px solid var(--bg-light);
+    }
+    
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.5px;
+      color: var(--accent-blue);
+      font-weight: 500;
+    }
+
+    main {
+      padding: 24px;
+      max-width: 1200px;
+      margin: 20px auto;
+      animation: fadeIn 0.7s ease-in-out;
+    }
+
+    /* === BỘ LỌC === */
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 24px;
+      align-items: center;
+      background: var(--bg-medium);
+      padding: 16px;
+      border-radius: 10px;
+    }
+    
+    .filters label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-right: -4px;
+    }
+
+    select {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--bg-light);
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'Poppins', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    select:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3);
+    }
+
+    /* === THẺ TRỊ SỐ (KPI) === */
+    .kpi-grid {
+      display: grid;
+      /* Tự động chia cột, mỗi cột tối thiểu 200px, tối đa 1fr */
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--bg-medium);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover { 
+      transform: translateY(-4px); 
+      box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+    }
+    
+    .card-icon {
+      font-size: 2.5rem;
+      line-height: 1;
+    }
+    
+    .card-content {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .card-title {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    
+    .card-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    /* === KHUNG CHỨA BIỂU ĐỒ === */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr); /* Lưới 3 cột */
+      gap: 20px;
+    }
+    
+    .chart-container {
+      background: var(--bg-medium);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      /* Đặt chiều cao cho thẻ chứa */
+      position: relative;
+    }
+    
+    /* Gán chiều cao khác nhau cho các loại biểu đồ */
+    .chart-container.chart-bar {
+      grid-column: span 3; /* Biểu đồ Bar chiếm 3 cột */
+      height: 350px;
+    }
+    .chart-container.chart-line {
+      grid-column: span 2; /* Biểu đồ Line chiếm 2 cột */
+      height: 300px;
+    }
+    .chart-container.chart-pie {
+      grid-column: span 1; /* Biểu đồ Pie chiếm 1 cột */
+      height: 300px;
+    }
+    
+    .chart-container h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    /* Canvas sẽ lấp đầy thẻ chứa nó */
+    canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 900px) {
+      .chart-container.chart-line {
+        grid-column: span 3; /* Chiếm toàn bộ chiều rộng */
+      }
+      .chart-container.chart-pie {
+        grid-column: span 3; /* Chiếm toàn bộ chiều rộng */
+      }
+    }
+    
+    @media (max-width: 768px) {
+      main { padding: 16px; }
+      .kpi-grid {
+        grid-template-columns: 1fr; /* 1 cột trên di động */
+      }
+      .chart-grid {
+        grid-template-columns: 1fr; /* 1 cột trên di động */
+      }
+      /* Reset grid span trên di động */
+      .chart-container.chart-bar,
+      .chart-container.chart-line,
+      .chart-container.chart-pie {
+        grid-column: span 1;
+      }
+    }
+
+    @keyframes fadeIn { 
+      from { opacity: 0; transform: translateY(10px); } 
+      to { opacity: 1; transform: none; } 
+    }
+  </style>
+</head>
+<body>
+  <header><h1>🎮 Steam Game Analytics Dashboard</h1></header>
+  
+  <main>
+    <div class="filters">
+      <label for="genreSelect">Thể loại:</label>
+      <select id="genreSelect">
+        <option value="">Tất cả</option>
+      </select>
+      <label for="yearSelect">Năm:</label>
+      <select id="yearSelect">
+        <option value="">Tất cả</option>
+      </select>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="card">
+        <div class="card-icon">🎮</div>
+        <div class="card-content">
+          <span class="card-title">Tổng số Game</span>
+          <span class="card-value" id="total-value">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">💲</div>
+        <div class="card-content">
+          <span class="card-title">Giá trung bình</span>
+          <span class="card-value" id="price-value">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🏆</div>
+        <div class="card-content">
+          <span class="card-title">Thể loại Top</span>
+          <span class="card-value" id="genre-value">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">👥</div>
+        <div class="card-content">
+          <span class="card-title">Tổng sở hữu</span>
+          <span class="card-value" id="owners-value">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      
+      <div class="chart-container chart-bar">
+        <h3>Top 10 Game phổ biến</h3>
+        <canvas id="topChart"></canvas>
+      </div>
+      
+      <div class="chart-container chart-line">
+        <h3>Số lượng Game theo năm</h3>
+        <canvas id="seriesChart"></canvas>
+      </div>
+
+      <div class="chart-container chart-pie">
+        <h3>Tỷ lệ Thể loại (Top 8)</h3>
+        <canvas id="pieChart"></canvas>
+      </div>
+      
+    </div>
+  </main>
+
+<script>
+// === CÀI ĐẶT CHART.JS MẶC ĐỊNH ===
+Chart.defaults.color = '#9ca3af'; // Màu chữ mặc định (trục, nhãn)
+Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)'; // Màu lưới
+Chart.defaults.plugins.legend.labels.color = '#f3f4f6'; // Màu chữ của legend
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+Chart.defaults.plugins.tooltip.titleColor = '#f3f4f6';
+Chart.defaults.plugins.tooltip.bodyColor = '#f3f4f6';
+
+const base = location.origin;
+const genreSelect = document.getElementById('genreSelect');
+const yearSelect = document.getElementById('yearSelect');
+
+async function fetchJSON(url){ const r = await fetch(url); return r.json(); }
+
+async function loadFilters(){
+  const genres = await fetchJSON(base + '/api/aggregate?by=genre');
+  const years = await fetchJSON(base + '/api/series?metric=count');
+  
+  // Lấy 30 thể loại đầu
+  Object.keys(genres).slice(0,30).forEach(g=>{
+    const opt=document.createElement('option');
+    opt.value=g; opt.textContent=g;
+    genreSelect.appendChild(opt);
+  });
+  
+  // Sắp xếp năm
+  Object.keys(years).sort().forEach(y=>{
+    const opt=document.createElement('option');
+    opt.value=y; opt.textContent=y;
+    yearSelect.appendChild(opt);
+  });
+}
+
+async function updateDashboard(){
+  const genre = genreSelect.value;
+  const year = yearSelect.value;
+  let params = '';
+  if(genre) params += `&genre=${encodeURIComponent(genre)}`;
+  if(year) params += `&start=${year}-01-01&end=${year}-12-31`;
+
+  const [summary, top, series, agg] = await Promise.all([
+    fetchJSON(base + '/api/stats/summary?' + params),
+    fetchJSON(base + '/api/top?metric=popularity&n=10' + params),
+    fetchJSON(base + '/api/series?metric=count' + params),
+    fetchJSON(base + '/api/aggregate?by=genre' + params)
+  ]);
+
+  // Cập nhật các thẻ KPI
+  document.getElementById('total-value').innerText = summary.total_games;
+  document.getElementById('price-value').innerText = `$${summary.avg_price}`;
+  document.getElementById('genre-value').innerText = summary.top_genre;
+  document.getElementById('owners-value').innerText = summary.total_owners.toLocaleString();
+
+  renderCharts(top, series, agg);
+}
+
+let charts = [];
+function renderCharts(top, series, agg){
+  // Xóa các biểu đồ cũ trước khi vẽ mới
+  charts.forEach(c=>c.destroy());
+  charts = [];
+
+  const ctxTop = document.getElementById('topChart').getContext('2d');
+  const ctxSeries = document.getElementById('seriesChart').getContext('2d');
+  const ctxPie = document.getElementById('pieChart').getContext('2d');
+
+  // Màu Gradient cho biểu đồ Bar
+  const gradient = ctxTop.createLinearGradient(0, 0, 0, ctxTop.canvas.clientHeight);
+  gradient.addColorStop(0, 'rgba(96, 165, 250, 0.8)'); // --accent-blue
+  gradient.addColorStop(1, 'rgba(96, 165, 250, 0.2)');
+
+  // 1. Biểu đồ Top 10 (Bar)
+  charts.push(new Chart(ctxTop, {
+    type: 'bar',
+    data: {
+      labels: top.map(x => x.name.length > 20 ? x.name.substring(0, 20) + '...' : x.name), // Cắt bớt tên dài
+      datasets: [{
+        label: 'Popularity', 
+        data: top.map(x => x.popularity), 
+        backgroundColor: gradient,
+        borderColor: '#60a5fa',
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+      }
+    }
+  }));
+
+  // 2. Biểu đồ theo năm (Line)
+  const years = Object.keys(series).sort();
+  charts.push(new Chart(ctxSeries, {
+    type: 'line',
+    data: {
+      labels: years, 
+      datasets: [{
+        label: 'Số Game mỗi năm', 
+        data: years.map(y => series[y]), 
+        borderColor: '#34d399', // --accent-green
+        backgroundColor: 'rgba(52, 211, 153, 0.1)',
+        tension: 0.3, 
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', align: 'start' }
+      }
+    }
+  }));
+
+  // 3. Biểu đồ thể loại (Pie)
+  const keys = Object.keys(agg).sort((a,b) => agg[b] - agg[a]).slice(0, 8); // Sắp xếp và lấy 8 top
+  charts.push(new Chart(ctxPie, {
+    type: 'doughnut', // 'pie' hoặc 'doughnut'
+    data: {
+      labels: keys, 
+      datasets: [{
+        data: keys.map(k => agg[k]), 
+        backgroundColor: [
+          '#f87171', '#facc15', '#34d399', '#60a5fa', 
+          '#a78bfa', '#f472b6', '#fb923c', '#4ade80'
+        ],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { 
+          position: 'right', // Hiển thị legend bên phải
+          labels: {
+            boxWidth: 12
+          }
+        }
+      }
+    }
+  }));
+}
+
+// === KHỞI CHẠY ===
+genreSelect.addEventListener('change', updateDashboard);
+yearSelect.addEventListener('change', updateDashboard);
+
+// Tải bộ lọc, sau đó tải dữ liệu dashboard
+loadFilters().then(updateDashboard);
+</script>
+</body>
+</html>
