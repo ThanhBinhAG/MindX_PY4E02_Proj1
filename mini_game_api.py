@@ -17,7 +17,7 @@ import re  # <-- THÊM DÒNG NÀY
 from datetime import datetime
 
 # ===================== CONFIG =====================
-CSV_PATH = os.environ.get("STEAM_CSV", "mini-game-dashboard/data/steam.csv")
+CSV_PATH = os.environ.get("STEAM_CSV", "data/steam.csv")
 PARQUET_PATH = None  # không dùng parquet
 DEFAULT_DATE_COL = "release_date"
 PORT = int(os.environ.get("PORT", 5000))
@@ -68,6 +68,8 @@ def light_clean(df):
         else 0,
         axis=1,
     )
+    df["total_reviews"] = (pd.to_numeric(df["positive"], errors="coerce").fillna(0) +
+                            pd.to_numeric(df["negative"], errors="coerce").fillna(0)).astype(int)
 
     # Owners [SỬ DỤNG HÀM MỚI]
     owner_col = next((c for c in df.columns if "owner" in c.lower()), None)
@@ -79,6 +81,47 @@ def light_clean(df):
 
     # Popularity
     df["popularity"] = np.log1p(df["owners"]) * (df["positive_rate"] + 0.01)
+
+    # Business-friendly features
+    # Revenue proxy: owners * price (chỉ là xấp xỉ để tham khảo)
+    df["revenue_proxy"] = (df["owners"].astype(float) * df["price"].astype(float)).fillna(0.0)
+
+    # Price band
+    def map_price_band(p):
+        if p <= 0:
+            return "Free"
+        if p < 5:
+            return "<$5"
+        if p < 15:
+            return "$5-$15"
+        if p < 30:
+            return "$15-$30"
+        return ">$30"
+    df["price_band"] = df["price"].apply(map_price_band)
+
+    # Owners tier
+    def map_owners_tier(o):
+        if o < 50000:
+            return "Indie (<50k)"
+        if o < 200000:
+            return "Mid (50k-200k)"
+        if o < 1000000:
+            return "Hit (200k-1M)"
+        return "Blockbuster (>=1M)"
+    df["owners_tier"] = df["owners"].apply(map_owners_tier)
+
+    # Review band by positive_rate
+    def map_review_band(r):
+        if r >= 0.9:
+            return "Overwhelmingly Positive (>=90%)"
+        if r >= 0.8:
+            return "Very Positive (80-90%)"
+        if r >= 0.6:
+            return "Mostly Positive (60-80%)"
+        if r >= 0.4:
+            return "Mixed (40-60%)"
+        return "Negative (<40%)"
+    df["review_band"] = df["positive_rate"].apply(map_review_band)
 
     # Genres
     if "genres" in df.columns:
@@ -204,7 +247,9 @@ def top_games():
     if metric not in df.columns:
         return jsonify({"error": f"Metric '{metric}' không tồn tại."}), 400
     top = df.sort_values(metric, ascending=False).head(n)
-    return jsonify(top[["appid", "name", metric, "price", "release_year"]].to_dict(orient="records"))
+    # Trả thêm store_url để front-end dùng trực tiếp nếu muốn
+    top = top.assign(store_url=top["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/"))
+    return jsonify(top[["appid", "name", metric, "price", "release_year", "store_url"]].to_dict(orient="records"))
 
 
 @app.route("/api/series")
@@ -230,7 +275,7 @@ def series():
 
 @app.route("/api/aggregate")
 def aggregate():
-    """Phân bố theo genre / region / publisher."""
+    """Phân bố theo genre / region / publisher / price_band / owners_tier / review_band."""
     df = load_df()
     df = apply_filters(df, request.args)
     by = request.args.get("by", "genre")
@@ -238,11 +283,132 @@ def aggregate():
         s = df["region"].fillna("Unknown").value_counts().to_dict()
     elif by == "publisher" and "publisher" in df.columns:
         s = df["publisher"].fillna("Unknown").value_counts().to_dict()
+    elif by in ("price_band", "owners_tier", "review_band"):
+        s = df[by].fillna("Unknown").value_counts().to_dict()
     else:
         # Tách 'genres', loại bỏ khoảng trắng, loại bỏ giá trị rỗng và đếm
         s = df["genres"].str.split(";").explode().str.strip()
         s = s[s != ''].value_counts().to_dict()
     return jsonify(s)
+
+
+@app.route("/api/game/<int:appid>")
+def game_detail(appid: int):
+    """Chi tiết 1 game + liên kết ngoài (Steam store)."""
+    df = load_df()
+    df = apply_filters(df, request.args)
+    row = df[df["appid"] == appid]
+    if row.empty:
+        return jsonify({"error": "Game không tồn tại"}), 404
+    r = row.iloc[0].to_dict()
+    r["store_url"] = f"https://store.steampowered.com/app/{int(r['appid'])}/"
+    # Rút gọn output với các trường thường dùng nếu quá dài
+    return jsonify(r)
+
+
+@app.route("/api/segments")
+def segments():
+    """Phân tích segment cho mục tiêu business: phân phối theo price_band, owners_tier, review_band
+    và một số chỉ số tổng hợp theo genre/publisher: count, avg_price, avg_positive, revenue_proxy.
+    """
+    df = load_df()
+    df = apply_filters(df, request.args)
+
+    # Phân phối segment
+    out = {
+        "price_band": df["price_band"].value_counts().to_dict(),
+        "owners_tier": df["owners_tier"].value_counts().to_dict(),
+        "review_band": df["review_band"].value_counts().to_dict(),
+    }
+
+    # Tổng hợp theo genre (top 15)
+    genres_exp = df["genres"].str.split(";").explode().str.strip()
+    genres_exp = genres_exp[genres_exp != ""]
+    joined = df.join(genres_exp.rename("genre_exp"))
+    g = joined.groupby("genre_exp").agg(
+        count=("appid", "count"),
+        avg_price=("price", "mean"),
+        avg_positive=("positive_rate", "mean"),
+        revenue_proxy=("revenue_proxy", "sum"),
+    ).reset_index().sort_values(["revenue_proxy", "count"], ascending=False).head(15)
+    out["genre_summary"] = g.to_dict(orient="records")
+
+    # Tổng hợp theo publisher nếu có
+    if "publisher" in df.columns:
+        p = df.groupby("publisher").agg(
+            count=("appid", "count"),
+            avg_price=("price", "mean"),
+            avg_positive=("positive_rate", "mean"),
+            revenue_proxy=("revenue_proxy", "sum"),
+        ).reset_index().sort_values(["revenue_proxy", "count"], ascending=False).head(15)
+        out["publisher_summary"] = p.to_dict(orient="records")
+
+    return jsonify(out)
+
+
+@app.route("/api/reviews")
+def reviews_summary():
+    """Tổng hợp đánh giá: scatter (positive_rate vs total_reviews) và histogram theo positive_rate.
+    - Trả về điểm scatter (tối đa 50 game có total_reviews cao nhất)
+    - Trả về histogram theo bin của positive_rate (0-100, bước 10) cộng gộp theo số lượt review
+    """
+    df = load_df()
+    df = apply_filters(df, request.args)
+
+    if df.empty:
+        return jsonify({"points": [], "hist": {}})
+
+    # Scatter points: lấy top theo total_reviews
+    top_n = int(request.args.get("n", 50))
+    dft = df.sort_values("total_reviews", ascending=False).head(top_n).copy()
+    dft["store_url"] = dft["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/")
+    points = dft[["appid", "name", "positive_rate", "total_reviews", "owners", "price", "store_url"]]
+    points["positive_rate_pct"] = (points["positive_rate"] * 100.0).clip(0, 100)
+    points = points.to_dict(orient="records")
+
+    # Histogram theo bin của positive_rate (0-100, step 10), tổng số review trong mỗi bin
+    bins = list(range(0, 101, 10))  # [0,10,20,...,100]
+    # chuyển về % để dễ hiểu
+    pr_pct = (df["positive_rate"].fillna(0) * 100.0).clip(0, 100)
+    cats = pd.cut(pr_pct, bins=bins, right=False, include_lowest=True)
+    hist = df.groupby(cats)["total_reviews"].sum().to_dict()
+    # chuẩn hóa key: "0-10", "10-20", ...
+    hist_out = {}
+    for interval, val in hist.items():
+        if pd.isna(val):
+            continue
+        left = int(interval.left)
+        right = int(interval.right)
+        hist_out[f"{left}-{right}"] = int(val)
+
+    return jsonify({"points": points, "hist": hist_out})
+
+
+@app.route("/api/suggest")
+def suggest():
+    """Gợi ý tên game dựa trên từ khóa 'q'. Trả về tối đa n kết quả theo total_reviews hoặc popularity.
+    Tôn trọng các filter khác (genre/start/end/price...).
+    """
+    df = load_df()
+    # Áp dụng các filter khác trước (ngoại trừ q, vì q đang dùng cho gợi ý)
+    params = request.args.to_dict(flat=True).copy()
+    q = params.pop("q", None)
+    df = apply_filters(df, params)
+    if not q:
+        return jsonify([])
+    n = int(request.args.get("n", 8))
+    mask = df["name"].astype(str).str.contains(q, case=False, na=False)
+    sub = df[mask].copy()
+    if sub.empty:
+        return jsonify([])
+    # Sắp xếp ưu tiên nhiều review hơn, sau đó popularity
+    if "total_reviews" in sub.columns:
+        sub = sub.sort_values(["total_reviews", "popularity"], ascending=False)
+    else:
+        sub = sub.sort_values("popularity", ascending=False)
+    sub = sub.head(n)
+    sub["store_url"] = sub["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/")
+    return jsonify(sub[["appid", "name", "price", "store_url"]].to_dict(orient="records"))
 
 
 @app.route("/api/export")

@@ -74,6 +74,21 @@
       margin-right: -4px;
     }
 
+    .input-wrap { position: relative; display: inline-block; }
+    .suggest-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: var(--bg-medium);
+      border: 1px solid var(--bg-light);
+      border-radius: 8px; padding: 6px 0; z-index: 20;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+      max-height: 280px; overflow: auto;
+      display: none;
+    }
+    .suggest-item { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; }
+    .suggest-item:hover { background: rgba(96,165,250,0.08); }
+    .suggest-name { color: var(--text-primary); }
+    .suggest-meta { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+
     select {
       padding: 8px 12px;
       border-radius: 6px;
@@ -213,6 +228,30 @@
       from { opacity: 0; transform: translateY(10px); } 
       to { opacity: 1; transform: none; } 
     }
+
+    /* === BUTTONS === */
+    .btn {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--bg-light);
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: box-shadow .2s, transform .05s, border-color .2s, color .2s;
+    }
+    .btn:hover { box-shadow: 0 0 0 3px rgba(96,165,250,.2); border-color: var(--accent-blue); }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { border-color: var(--accent-green); color: var(--accent-green); }
+    .btn.secondary { border-color: var(--accent-blue); color: var(--accent-blue); }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .btn.loading { position: relative; color: transparent; }
+    .btn.loading::after {
+      content: '';
+      position: absolute; inset: 0; margin: auto; width: 14px; height: 14px;
+      border: 2px solid var(--accent-blue); border-top-color: transparent; border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -228,6 +267,35 @@
       <select id="yearSelect">
         <option value="">Tất cả</option>
       </select>
+      <label for="qInput">Tìm kiếm:</label>
+      <span class="input-wrap">
+        <input id="qInput" type="text" placeholder="Tên game..." style="padding:8px 12px;border-radius:6px;border:1px solid var(--bg-light);background:var(--bg-dark);color:var(--text-primary);min-width:240px;"/>
+        <div id="suggest" class="suggest-dropdown"></div>
+      </span>
+      <label for="minPrice">Giá tối thiểu:</label>
+      <select id="minPrice">
+        <option value="">Bất kỳ</option>
+        <option value="0">0</option>
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="15">15</option>
+        <option value="30">30</option>
+        <option value="60">60</option>
+      </select>
+      <label for="maxPrice">Giá tối đa:</label>
+      <select id="maxPrice">
+        <option value="">Bất kỳ</option>
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="15">15</option>
+        <option value="30">30</option>
+        <option value="60">60</option>
+        <option value="100">100</option>
+      </select>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button id="applyBtn" class="btn primary">Áp dụng</button>
+        <button id="resetBtn" class="btn secondary">Reset</button>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -277,6 +345,11 @@
         <h3>Tỷ lệ Thể loại (Top 8)</h3>
         <canvas id="pieChart"></canvas>
       </div>
+
+      <div class="chart-container chart-line">
+        <h3>Đánh giá vs Lượt đánh giá</h3>
+        <canvas id="reviewChart"></canvas>
+      </div>
       
     </div>
   </main>
@@ -293,6 +366,12 @@ Chart.defaults.plugins.tooltip.bodyColor = '#f3f4f6';
 const base = location.origin;
 const genreSelect = document.getElementById('genreSelect');
 const yearSelect = document.getElementById('yearSelect');
+const qInput = document.getElementById('qInput');
+const minPrice = document.getElementById('minPrice');
+const maxPrice = document.getElementById('maxPrice');
+const resetBtn = document.getElementById('resetBtn');
+const applyBtn = document.getElementById('applyBtn');
+const suggest = document.getElementById('suggest');
 
 async function fetchJSON(url){ const r = await fetch(url); return r.json(); }
 
@@ -315,19 +394,39 @@ async function loadFilters(){
   });
 }
 
+function setLoading(isLoading){
+  if (!applyBtn || !resetBtn) return;
+  applyBtn.disabled = isLoading;
+  resetBtn.disabled = isLoading;
+  applyBtn.classList.toggle('loading', isLoading);
+}
+
 async function updateDashboard(){
+  setLoading(true);
   const genre = genreSelect.value;
   const year = yearSelect.value;
+  const q = qInput.value.trim();
+  const minP = minPrice.value;
+  const maxP = maxPrice.value;
   let params = '';
   if(genre) params += `&genre=${encodeURIComponent(genre)}`;
   if(year) params += `&start=${year}-01-01&end=${year}-12-31`;
+  if(q) params += `&q=${encodeURIComponent(q)}`;
+  if(minP) params += `&min_price=${encodeURIComponent(minP)}`;
+  if(maxP) params += `&max_price=${encodeURIComponent(maxP)}`;
 
-  const [summary, top, series, agg] = await Promise.all([
-    fetchJSON(base + '/api/stats/summary?' + params),
-    fetchJSON(base + '/api/top?metric=popularity&n=10' + params),
-    fetchJSON(base + '/api/series?metric=count' + params),
-    fetchJSON(base + '/api/aggregate?by=genre' + params)
-  ]);
+  let summary, top, series, agg, reviews;
+  try {
+    [summary, top, series, agg, reviews] = await Promise.all([
+      fetchJSON(base + '/api/stats/summary?' + params),
+      fetchJSON(base + '/api/top?metric=popularity&n=10' + params),
+      fetchJSON(base + '/api/series?metric=count' + params),
+      fetchJSON(base + '/api/aggregate?by=genre' + params),
+      fetchJSON(base + '/api/reviews?n=50' + params)
+    ]);
+  } finally {
+    setLoading(false);
+  }
 
   // Cập nhật các thẻ KPI
   document.getElementById('total-value').innerText = summary.total_games;
@@ -335,11 +434,11 @@ async function updateDashboard(){
   document.getElementById('genre-value').innerText = summary.top_genre;
   document.getElementById('owners-value').innerText = summary.total_owners.toLocaleString();
 
-  renderCharts(top, series, agg);
+  renderCharts(top, series, agg, reviews);
 }
 
 let charts = [];
-function renderCharts(top, series, agg){
+function renderCharts(top, series, agg, reviews){
   // Xóa các biểu đồ cũ trước khi vẽ mới
   charts.forEach(c=>c.destroy());
   charts = [];
@@ -347,6 +446,7 @@ function renderCharts(top, series, agg){
   const ctxTop = document.getElementById('topChart').getContext('2d');
   const ctxSeries = document.getElementById('seriesChart').getContext('2d');
   const ctxPie = document.getElementById('pieChart').getContext('2d');
+  const ctxReview = document.getElementById('reviewChart').getContext('2d');
 
   // Màu Gradient cho biểu đồ Bar
   const gradient = ctxTop.createLinearGradient(0, 0, 0, ctxTop.canvas.clientHeight);
@@ -371,11 +471,31 @@ function renderCharts(top, series, agg){
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            afterBody: (tt) => {
+              const i = tt[0].dataIndex;
+              const it = top[i];
+              if (!it) return '';
+              const price = (it.price != null) ? `$${it.price}` : 'N/A';
+              return `\nGiá: ${price}`;
+            }
+          }
+        }
       },
       scales: {
         x: { grid: { display: false } },
         y: { grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+      },
+      onClick: (evt, elements) => {
+        if (!elements || elements.length === 0) return;
+        const idx = elements[0].index;
+        const item = top[idx];
+        if (item && item.appid) {
+          const url = item.store_url || (`https://store.steampowered.com/app/${item.appid}/`);
+          window.open(url, '_blank');
+        }
       }
     }
   }));
@@ -432,11 +552,116 @@ function renderCharts(top, series, agg){
       }
     }
   }));
+
+  // 4. Scatter: Positive Rate vs Total Reviews
+  const pts = reviews.points || [];
+  charts.push(new Chart(ctxReview, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Game (Top theo lượt đánh giá)',
+        data: pts.map(p => ({ x: p.positive_rate_pct, y: p.total_reviews, appid: p.appid, name: p.name, price: p.price, store_url: p.store_url })),
+        pointBackgroundColor: '#f59e0b',
+        pointBorderColor: '#fbbf24',
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Tỉ lệ đánh giá tích cực (%)' },
+          min: 0, max: 100
+        },
+        y: {
+          title: { display: true, text: 'Tổng lượt đánh giá' },
+          type: 'logarithmic',
+          ticks: { callback: (v) => Number(v).toLocaleString() }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const d = ctx.raw;
+              const rate = (d.x ?? 0).toFixed(1) + '%';
+              const revs = (d.y ?? 0).toLocaleString();
+              const price = (d.price != null) ? `$${d.price}` : 'N/A';
+              return `${d.name} — ${rate}, ${revs} reviews, ${price}`;
+            }
+          }
+        }
+      },
+      onClick: (evt, elements) => {
+        if (!elements || elements.length === 0) return;
+        const el = elements[0];
+        const d = el.element.$context.raw;
+        if (d && d.appid) {
+          const url = d.store_url || (`https://store.steampowered.com/app/${d.appid}/`);
+          window.open(url, '_blank');
+        }
+      }
+    }
+  }));
 }
 
 // === KHỞI CHẠY ===
 genreSelect.addEventListener('change', updateDashboard);
 yearSelect.addEventListener('change', updateDashboard);
+qInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') updateDashboard(); });
+minPrice.addEventListener('change', updateDashboard);
+maxPrice.addEventListener('change', updateDashboard);
+applyBtn.addEventListener('click', updateDashboard);
+resetBtn.addEventListener('click', ()=>{
+  genreSelect.value = '';
+  yearSelect.value = '';
+  qInput.value = '';
+  minPrice.value = '';
+  maxPrice.value = '';
+  updateDashboard();
+});
+
+// ==== Autocomplete gợi ý tên game ====
+let suggestTimer;
+async function loadSuggest(){
+  const q = qInput.value.trim();
+  if(!q){ suggest.style.display='none'; suggest.innerHTML=''; return; }
+  const genre = genreSelect.value;
+  const year = yearSelect.value;
+  let params = `?q=${encodeURIComponent(q)}`;
+  if(genre) params += `&genre=${encodeURIComponent(genre)}`;
+  if(year) params += `&start=${year}-01-01&end=${year}-12-31`;
+  try{
+    const items = await fetchJSON(base + '/api/suggest' + params);
+    if(!Array.isArray(items) || items.length===0){ suggest.style.display='none'; suggest.innerHTML=''; return; }
+    suggest.innerHTML = items.map(it=>
+      `<div class="suggest-item" data-appid="${it.appid}" data-name="${it.name.replace(/"/g,'&quot;')}">`+
+        `<span class="suggest-name">${it.name}</span>`+
+        `<span class="suggest-meta">$${(it.price ?? '—')}</span>`+
+      `</div>`
+    ).join('');
+    suggest.style.display='block';
+  }catch{ /* silent */ }
+}
+
+qInput.addEventListener('input', ()=>{
+  clearTimeout(suggestTimer);
+  suggestTimer = setTimeout(loadSuggest, 220);
+});
+
+document.addEventListener('click', (e)=>{
+  if(!suggest.contains(e.target) && e.target!==qInput){ suggest.style.display='none'; }
+});
+
+suggest.addEventListener('click', (e)=>{
+  const item = e.target.closest('.suggest-item');
+  if(!item) return;
+  const name = item.getAttribute('data-name');
+  qInput.value = name || '';
+  suggest.style.display='none';
+  updateDashboard();
+});
 
 // Tải bộ lọc, sau đó tải dữ liệu dashboard
 loadFilters().then(updateDashboard);
