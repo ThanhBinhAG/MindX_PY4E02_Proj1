@@ -18,6 +18,7 @@ from datetime import datetime
 
 # ===================== CONFIG =====================
 CSV_PATH = os.environ.get("STEAM_CSV", "data/steam.csv")
+REVENUE_CSV_PATH = os.environ.get("REVENUE_CSV", "data/Steam_2024_bestRevenue_1500.csv")
 PARQUET_PATH = None  # không dùng parquet
 DEFAULT_DATE_COL = "release_date"
 PORT = int(os.environ.get("PORT", 5000))
@@ -27,8 +28,14 @@ app = Flask(__name__)
 CORS(app)
 
 # ----------------- Utilities -----------------
-def load_df():
-    """Load CSV (hoặc parquet nếu có)."""
+def load_df(use_revenue=False):
+    """Load CSV (hoặc parquet nếu có). Nếu use_revenue=True, load dữ liệu revenue."""
+    if use_revenue:
+        if not os.path.exists(REVENUE_CSV_PATH):
+            raise FileNotFoundError(f"Không tìm thấy dataset revenue tại {REVENUE_CSV_PATH}")
+        df = pd.read_csv(REVENUE_CSV_PATH, low_memory=False)
+        return clean_revenue_df(df)
+    
     if PARQUET_PATH and os.path.exists(PARQUET_PATH):
         df = pd.read_parquet(PARQUET_PATH)
         return df
@@ -86,99 +93,117 @@ def light_clean(df):
     # Revenue proxy: owners * price (chỉ là xấp xỉ để tham khảo)
     df["revenue_proxy"] = (df["owners"].astype(float) * df["price"].astype(float)).fillna(0.0)
 
-    # Price band
-    def map_price_band(p):
-        if p <= 0:
-            return "Free"
-        if p < 5:
-            return "<$5"
-        if p < 15:
-            return "$5-$15"
-        if p < 30:
-            return "$15-$30"
-        return ">$30"
-    df["price_band"] = df["price"].apply(map_price_band)
+    # Price band (vectorized)
+    price_bins = [-float('inf'), 0, 5, 15, 30, float('inf')]
+    price_labels = ["Free", "<$5", "$5-$15", "$15-$30", ">$30"]
+    df["price_band"] = pd.cut(df["price"], bins=price_bins, labels=price_labels, right=False)
 
-    # Owners tier
-    def map_owners_tier(o):
-        if o < 50000:
-            return "Indie (<50k)"
-        if o < 200000:
-            return "Mid (50k-200k)"
-        if o < 1000000:
-            return "Hit (200k-1M)"
-        return "Blockbuster (>=1M)"
-    df["owners_tier"] = df["owners"].apply(map_owners_tier)
+    # Owners tier (vectorized)
+    owners_bins = [-float('inf'), 50000, 200000, 1000000, float('inf')]
+    owners_labels = ["Indie (<50k)", "Mid (50k-200k)", "Hit (200k-1M)", "Blockbuster (>=1M)"]
+    df["owners_tier"] = pd.cut(df["owners"], bins=owners_bins, labels=owners_labels, right=False)
 
-    # Review band by positive_rate
-    def map_review_band(r):
-        if r >= 0.9:
-            return "Overwhelmingly Positive (>=90%)"
-        if r >= 0.8:
-            return "Very Positive (80-90%)"
-        if r >= 0.6:
-            return "Mostly Positive (60-80%)"
-        if r >= 0.4:
-            return "Mixed (40-60%)"
-        return "Negative (<40%)"
-    df["review_band"] = df["positive_rate"].apply(map_review_band)
+    # Review band (vectorized, descending for right cut)
+    review_bins = [-float('inf'), 0.4, 0.6, 0.8, 0.9, float('inf')]
+    review_labels = [
+        "Negative (<40%)",
+        "Mixed (40-60%)",
+        "Mostly Positive (60-80%)",
+        "Very Positive (80-90%)",
+        "Overwhelmingly Positive (>=90%)"
+    ]
+    df["review_band"] = pd.cut(df["positive_rate"], bins=review_bins, labels=review_labels, right=True)
 
     # Genres
-    if "genres" in df.columns:
-        df["genres"] = df["genres"].fillna("").astype(str)
-    else:
-        df["genres"] = ""
+    df["genres"] = df["genres"].fillna("").astype(str) if "genres" in df.columns else ""
 
     # Region fallback
-    if "region" not in df.columns:
-        df["region"] = "Global"
+    df["region"] = df.get("region", "Global")
 
     # Avg playtime
     play_col = next((c for c in df.columns if "playtime" in c.lower()), None)
-    if play_col:
-        df["avg_playtime"] = pd.to_numeric(df[play_col], errors="coerce").fillna(0)
-    else:
-        df["avg_playtime"] = 0
+    df["avg_playtime"] = pd.to_numeric(df[play_col], errors="coerce").fillna(0) if play_col else 0
 
-    # Ensure name & appid
-    if "name" not in df.columns:
-        df["name"] = df.index.astype(str)
-    if "appid" not in df.columns:
-        df["appid"] = range(1, len(df) + 1)
+    # Gọn hóa thêm cho các biến name & appid
+    for col, default in [("name", lambda df: df.index.astype(str)),
+                        ("appid", lambda df: range(1, len(df) + 1))]:
+        if col not in df.columns:
+            df[col] = default(df)
 
     return df
 
 
-def apply_filters(df, params):
+def clean_revenue_df(df):
+    """Xử lý dữ liệu revenue CSV."""
+    col_map = {
+        "release_date": lambda df: pd.to_datetime(df["releaseDate"], format="%d-%m-%Y", errors='coerce') if "releaseDate" in df.columns else pd.NaT,
+        "release_year": lambda df: pd.to_datetime(df["releaseDate"], format="%d-%m-%Y", errors='coerce').dt.year.fillna(0).astype(int) if "releaseDate" in df.columns else 0,
+        "price": lambda df: pd.to_numeric(df["price"], errors="coerce").fillna(0.0) if "price" in df.columns else 0.0,
+        "revenue": lambda df: pd.to_numeric(df["revenue"], errors="coerce").fillna(0.0) if "revenue" in df.columns else 0.0,
+        "copies_sold": lambda df: pd.to_numeric(df["copiesSold"], errors="coerce").fillna(0).astype(int) if "copiesSold" in df.columns else 0,
+        "review_score": lambda df: pd.to_numeric(df["reviewScore"], errors="coerce").fillna(0).astype(int) if "reviewScore" in df.columns else 0,
+        "publisher_class": lambda df: df["publisherClass"].fillna("Unknown").astype(str) if "publisherClass" in df.columns else "Unknown",
+        "publishers": lambda df: df["publishers"].fillna("").astype(str) if "publishers" in df.columns else "",
+        "developers": lambda df: df["developers"].fillna("").astype(str) if "developers" in df.columns else "",
+        "avg_playtime": lambda df: pd.to_numeric(df["avgPlaytime"], errors="coerce").fillna(0) if "avgPlaytime" in df.columns else 0,
+        "appid": lambda df: pd.to_numeric(df["steamId"], errors="coerce").fillna(0).astype(int) if "steamId" in df.columns else range(1, len(df) + 1),
+        "name": lambda df: df["name"] if "name" in df.columns else df.index.astype(str),
+        "genres": lambda df: "",
+        "region": lambda df: "Global"
+    }
+    for key, func in col_map.items():
+        df[key] = func(df)
+    return df
+
+
+def apply_filters(df, params, is_revenue=False):
     """Lọc dữ liệu theo tham số URL."""
-    d = df
-    start = params.get("start") or params.get("start_date")
-    end = params.get("end") or params.get("end_date")
-    genre = params.get("genre")
-    region = params.get("region")
-    publisher = params.get("publisher")
-    q = params.get("q")
-    min_price = params.get("min_price")
-    max_price = params.get("max_price")
+    filtered_df = df.copy()
+    date_column = "release_date" if is_revenue else DEFAULT_DATE_COL
+    
+    # Trích xuất các tham số filter
+    start_date = params.get("start") or params.get("start_date")
+    end_date = params.get("end") or params.get("end_date")
+    genre_filter = params.get("genre")
+    region_filter = params.get("region")
+    publisher_filter = params.get("publisher")
+    search_query = params.get("q")
+    min_price_filter = params.get("min_price")
+    max_price_filter = params.get("max_price")
+    publisher_class_filter = params.get("publisher_class")
 
-    if start:
-        d = d[d[DEFAULT_DATE_COL] >= pd.to_datetime(start, errors="coerce")]
-    if end:
-        d = d[d[DEFAULT_DATE_COL] <= pd.to_datetime(end, errors="coerce")]
-    if genre:
-        d = d[d["genres"].str.contains(genre, case=False, na=False)]
-    if region:
-        d = d[d["region"].str.contains(region, case=False, na=False)]
-    if publisher and "publisher" in d.columns:
-        d = d[d["publisher"].astype(str).str.contains(publisher, case=False, na=False)]
-    if q:
-        d = d[d["name"].astype(str).str.contains(q, case=False, na=False)]
-    if min_price:
-        d = d[d["price"] >= float(min_price)]
-    if max_price:
-        d = d[d["price"] <= float(max_price)]
-
-    return d
+    # Áp dụng các filter theo thứ tự
+    if start_date:
+        filtered_df = filtered_df[filtered_df[date_column] >= pd.to_datetime(start_date, errors="coerce")]
+    
+    if end_date:
+        filtered_df = filtered_df[filtered_df[date_column] <= pd.to_datetime(end_date, errors="coerce")]
+    
+    if genre_filter and not is_revenue:
+        filtered_df = filtered_df[filtered_df["genres"].str.contains(genre_filter, case=False, na=False)]
+    
+    if region_filter:
+        filtered_df = filtered_df[filtered_df["region"].str.contains(region_filter, case=False, na=False)]
+    
+    if publisher_filter:
+        if is_revenue and "publishers" in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df["publishers"].astype(str).str.contains(publisher_filter, case=False, na=False)]
+        elif "publisher" in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df["publisher"].astype(str).str.contains(publisher_filter, case=False, na=False)]
+    
+    if search_query:
+        filtered_df = filtered_df[filtered_df["name"].astype(str).str.contains(search_query, case=False, na=False)]
+    
+    if min_price_filter:
+        filtered_df = filtered_df[filtered_df["price"] >= float(min_price_filter)]
+    
+    if max_price_filter:
+        filtered_df = filtered_df[filtered_df["price"] <= float(max_price_filter)]
+    
+    if publisher_class_filter and is_revenue and "publisher_class" in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df["publisher_class"].str.contains(publisher_class_filter, case=False, na=False)]
+    
+    return filtered_df
 
 
 # [MÃ ĐÃ SỬA] Hàm trợ giúp để xử lý khoảng giá trị "owners"
@@ -215,81 +240,142 @@ def parse_owner_range(owner_str):
 @app.route("/api/stats/summary")
 def summary():
     """Tổng quan chỉ số (KPI)."""
-    df = load_df()
-    df = apply_filters(df, request.args)
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    df = load_df(use_revenue=use_revenue)
+    df = apply_filters(df, request.args, is_revenue=use_revenue)
     total_games = len(df)
     avg_price = round(df["price"].mean(), 2)
     avg_playtime = round(df["avg_playtime"].mean(), 2)
-    total_owners = int(df["owners"].sum())
-    top_genre = (
-        df["genres"].str.split(";").explode().str.strip().value_counts().idxmax()
-        if not df.empty and not df["genres"].str.strip().eq("").all()
-        else "N/A" # Thêm kiểm tra để tránh lỗi nếu không có genre
-    )
-    return jsonify(
-        {
-            "total_games": total_games,
-            "avg_price": avg_price,
-            "avg_playtime": avg_playtime,
-            "total_owners": total_owners,
-            "top_genre": top_genre,
-        }
-    )
+    
+    if use_revenue:
+        total_revenue = float(df["revenue"].sum())
+        total_copies = int(df["copies_sold"].sum()) if "copies_sold" in df.columns else 0
+        top_publisher_class = (
+            df["publisher_class"].value_counts().idxmax()
+            if not df.empty and "publisher_class" in df.columns
+            else "N/A"
+        )
+        return jsonify(
+            {
+                "total_games": total_games,
+                "avg_price": avg_price,
+                "avg_playtime": avg_playtime,
+                "total_revenue": total_revenue,
+                "total_copies": total_copies,
+                "top_publisher_class": top_publisher_class,
+            }
+        )
+    else:
+        total_owners = int(df["owners"].sum()) if "owners" in df.columns else 0
+        top_genre = (
+            df["genres"].str.split(";").explode().str.strip().value_counts().idxmax()
+            if not df.empty and not df["genres"].str.strip().eq("").all()
+            else "N/A"
+        )
+        return jsonify(
+            {
+                "total_games": total_games,
+                "avg_price": avg_price,
+                "avg_playtime": avg_playtime,
+                "total_owners": total_owners,
+                "top_genre": top_genre,
+            }
+        )
 
 
 @app.route("/api/top")
 def top_games():
     """Top N theo chỉ số."""
-    df = load_df()
-    df = apply_filters(df, request.args)
-    metric = request.args.get("metric", "popularity")
-    n = int(request.args.get("n", 10))
-    if metric not in df.columns:
-        return jsonify({"error": f"Metric '{metric}' không tồn tại."}), 400
-    top = df.sort_values(metric, ascending=False).head(n)
-    # Trả thêm store_url để front-end dùng trực tiếp nếu muốn
-    top = top.assign(store_url=top["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/"))
-    return jsonify(top[["appid", "name", metric, "price", "release_year", "store_url"]].to_dict(orient="records"))
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    df = load_df(use_revenue=use_revenue)
+    df = apply_filters(df, request.args, is_revenue=use_revenue)
+    if use_revenue:
+        metric = request.args.get("metric", "revenue")
+        n = int(request.args.get("n", 10))
+        if metric not in df.columns:
+            return jsonify({"error": f"Metric '{metric}' không tồn tại."}), 400
+        top = df.sort_values(metric, ascending=False).head(n)
+        top = top.assign(store_url=top["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/"))
+        cols = ["appid", "name", metric, "price", "release_year", "copies_sold", "publisher_class", "store_url"]
+        available_cols = [c for c in cols if c in top.columns]
+        return jsonify(top[available_cols].to_dict(orient="records"))
+    else:
+        metric = request.args.get("metric", "popularity")
+        n = int(request.args.get("n", 10))
+        if metric not in df.columns:
+            return jsonify({"error": f"Metric '{metric}' không tồn tại."}), 400
+        top = df.sort_values(metric, ascending=False).head(n)
+        top = top.assign(store_url=top["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/"))
+        return jsonify(top[["appid", "name", metric, "price", "release_year", "store_url"]].to_dict(orient="records"))
 
 
 @app.route("/api/series")
 def series():
     """Dữ liệu time-series theo năm."""
-    df = load_df()
-    df = apply_filters(df, request.args)
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    df = load_df(use_revenue=use_revenue)
+    filtered_df = apply_filters(df, request.args, is_revenue=use_revenue)
     
     # Lọc bỏ những năm không hợp lệ (ví dụ: năm 0)
-    df_valid_year = df[df["release_year"] > 1990] # Giả sử chỉ lấy game sau 1990
+    valid_year_df = filtered_df[filtered_df["release_year"] > 1990]
     
-    metric = request.args.get("metric", "count")
-    group = df_valid_year.groupby("release_year") # Nhóm theo 'release_year' đã xử lý
+    metric_type = request.args.get("metric", "count")
+    grouped_by_year = valid_year_df.groupby("release_year")
     
-    if metric == "avg_price":
-        res = group["price"].mean()
-    else:
-        res = group.size()
-        
-    out = {str(int(k)): float(v) for k, v in res.sort_index().items()}
-    return jsonify(out)
+    # Mapping các metric types
+    metric_handlers = {
+        "avg_price": lambda: grouped_by_year["price"].mean(),
+        "revenue": lambda: grouped_by_year["revenue"].sum() if use_revenue else grouped_by_year.size(),
+        "copies": lambda: grouped_by_year["copies_sold"].sum() if use_revenue and "copies_sold" in filtered_df.columns else grouped_by_year.size(),
+    }
+    
+    # Lấy kết quả theo metric
+    grouped_result = metric_handlers.get(metric_type, lambda: grouped_by_year.size())()
+    
+    # Format output: {year: value}
+    result_dict = {str(int(year)): float(value) for year, value in grouped_result.sort_index().items()}
+    return jsonify(result_dict)
 
 
 @app.route("/api/aggregate")
 def aggregate():
-    """Phân bố theo genre / region / publisher / price_band / owners_tier / review_band."""
-    df = load_df()
-    df = apply_filters(df, request.args)
-    by = request.args.get("by", "genre")
-    if by == "region":
-        s = df["region"].fillna("Unknown").value_counts().to_dict()
-    elif by == "publisher" and "publisher" in df.columns:
-        s = df["publisher"].fillna("Unknown").value_counts().to_dict()
-    elif by in ("price_band", "owners_tier", "review_band"):
-        s = df[by].fillna("Unknown").value_counts().to_dict()
+    """Phân bố theo genre / region / publisher / price_band / owners_tier / review_band / publisher_class."""
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    df = load_df(use_revenue=use_revenue)
+    filtered_df = apply_filters(df, request.args, is_revenue=use_revenue)
+    aggregate_by = request.args.get("by", "genre")
+    
+    # Mapping các trường hợp aggregate
+    aggregate_handlers = {
+        "publisher_class": lambda: filtered_df["publisher_class"].fillna("Unknown").value_counts().to_dict(),
+        "publisher": lambda: _get_publisher_aggregate(filtered_df, use_revenue),
+        "region": lambda: filtered_df["region"].fillna("Unknown").value_counts().to_dict(),
+        "price_band": lambda: filtered_df["price_band"].fillna("Unknown").value_counts().to_dict() if "price_band" in filtered_df.columns else {},
+        "owners_tier": lambda: filtered_df["owners_tier"].fillna("Unknown").value_counts().to_dict() if "owners_tier" in filtered_df.columns else {},
+        "review_band": lambda: filtered_df["review_band"].fillna("Unknown").value_counts().to_dict() if "review_band" in filtered_df.columns else {},
+    }
+    
+    # Xử lý aggregate theo loại
+    if aggregate_by in aggregate_handlers:
+        aggregated_data = aggregate_handlers[aggregate_by]()
+    elif use_revenue:
+        # Revenue data không có genres, trả về publisher_class
+        aggregated_data = filtered_df["publisher_class"].fillna("Unknown").value_counts().to_dict()
     else:
         # Tách 'genres', loại bỏ khoảng trắng, loại bỏ giá trị rỗng và đếm
-        s = df["genres"].str.split(";").explode().str.strip()
-        s = s[s != ''].value_counts().to_dict()
-    return jsonify(s)
+        genre_list = filtered_df["genres"].str.split(";").explode().str.strip()
+        aggregated_data = genre_list[genre_list != ''].value_counts().to_dict()
+    
+    return jsonify(aggregated_data)
+
+
+def _get_publisher_aggregate(df, is_revenue):
+    """Helper function để lấy aggregate theo publisher."""
+    if is_revenue and "publishers" in df.columns:
+        return df["publishers"].fillna("Unknown").value_counts().to_dict()
+    elif "publisher" in df.columns:
+        return df["publisher"].fillna("Unknown").value_counts().to_dict()
+    return {}
 
 
 @app.route("/api/game/<int:appid>")
@@ -297,13 +383,13 @@ def game_detail(appid: int):
     """Chi tiết 1 game + liên kết ngoài (Steam store)."""
     df = load_df()
     df = apply_filters(df, request.args)
-    row = df[df["appid"] == appid]
-    if row.empty:
+    game_row = df[df["appid"] == appid]
+    if game_row.empty:
         return jsonify({"error": "Game không tồn tại"}), 404
-    r = row.iloc[0].to_dict()
-    r["store_url"] = f"https://store.steampowered.com/app/{int(r['appid'])}/"
-    # Rút gọn output với các trường thường dùng nếu quá dài
-    return jsonify(r)
+    
+    game_data = game_row.iloc[0].to_dict()
+    game_data["store_url"] = f"https://store.steampowered.com/app/{int(game_data['appid'])}/"
+    return jsonify(game_data)
 
 
 @app.route("/api/segments")
@@ -315,35 +401,61 @@ def segments():
     df = apply_filters(df, request.args)
 
     # Phân phối segment
-    out = {
+    result = {
         "price_band": df["price_band"].value_counts().to_dict(),
         "owners_tier": df["owners_tier"].value_counts().to_dict(),
         "review_band": df["review_band"].value_counts().to_dict(),
     }
 
     # Tổng hợp theo genre (top 15)
-    genres_exp = df["genres"].str.split(";").explode().str.strip()
-    genres_exp = genres_exp[genres_exp != ""]
-    joined = df.join(genres_exp.rename("genre_exp"))
-    g = joined.groupby("genre_exp").agg(
+    exploded_genres = df["genres"].str.split(";").explode().str.strip()
+    non_empty_genres = exploded_genres[exploded_genres != ""]
+    df_with_genres = df.join(non_empty_genres.rename("genre_exp"))
+    
+    genre_summary = df_with_genres.groupby("genre_exp").agg(
         count=("appid", "count"),
         avg_price=("price", "mean"),
         avg_positive=("positive_rate", "mean"),
         revenue_proxy=("revenue_proxy", "sum"),
     ).reset_index().sort_values(["revenue_proxy", "count"], ascending=False).head(15)
-    out["genre_summary"] = g.to_dict(orient="records")
+    result["genre_summary"] = genre_summary.to_dict(orient="records")
 
     # Tổng hợp theo publisher nếu có
     if "publisher" in df.columns:
-        p = df.groupby("publisher").agg(
+        publisher_summary = df.groupby("publisher").agg(
             count=("appid", "count"),
             avg_price=("price", "mean"),
             avg_positive=("positive_rate", "mean"),
             revenue_proxy=("revenue_proxy", "sum"),
         ).reset_index().sort_values(["revenue_proxy", "count"], ascending=False).head(15)
-        out["publisher_summary"] = p.to_dict(orient="records")
+        result["publisher_summary"] = publisher_summary.to_dict(orient="records")
 
-    return jsonify(out)
+    return jsonify(result)
+
+
+@app.route("/api/revenue/analytics")
+def revenue_analytics():
+    """Analytics cho revenue data: Top games by revenue và Revenue by publisher class."""
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    if not use_revenue:
+        return jsonify({"error": "Endpoint này chỉ dùng cho revenue mode"}), 400
+    
+    df = load_df(use_revenue=True)
+    df = apply_filters(df, request.args, is_revenue=True)
+    
+    # Top games by revenue
+    n = int(request.args.get("n", 10))
+    top_by_revenue = df.nlargest(n, "revenue")[["appid", "name", "revenue", "copies_sold", "price", "publisher_class", "release_year"]].copy()
+    top_by_revenue["revenue"] = top_by_revenue["revenue"].astype(float)
+    top_by_revenue["store_url"] = top_by_revenue["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/")
+    
+    # Revenue by publisher class
+    revenue_by_class = df.groupby("publisher_class")["revenue"].sum().sort_values(ascending=False).to_dict()
+    
+    return jsonify({
+        "top_by_revenue": top_by_revenue.to_dict(orient="records"),
+        "revenue_by_class": revenue_by_class
+    })
 
 
 @app.route("/api/reviews")
@@ -352,36 +464,78 @@ def reviews_summary():
     - Trả về điểm scatter (tối đa 50 game có total_reviews cao nhất)
     - Trả về histogram theo bin của positive_rate (0-100, bước 10) cộng gộp theo số lượt review
     """
-    df = load_df()
-    df = apply_filters(df, request.args)
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    df = load_df(use_revenue=use_revenue)
+    df = apply_filters(df, request.args, is_revenue=use_revenue)
 
     if df.empty:
         return jsonify({"points": [], "hist": {}})
 
-    # Scatter points: lấy top theo total_reviews
     top_n = int(request.args.get("n", 50))
-    dft = df.sort_values("total_reviews", ascending=False).head(top_n).copy()
-    dft["store_url"] = dft["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/")
-    points = dft[["appid", "name", "positive_rate", "total_reviews", "owners", "price", "store_url"]]
-    points["positive_rate_pct"] = (points["positive_rate"] * 100.0).clip(0, 100)
-    points = points.to_dict(orient="records")
+    
+    if use_revenue:
+        return _get_revenue_reviews_data(df, top_n)
+    else:
+        return _get_normal_reviews_data(df, top_n)
 
-    # Histogram theo bin của positive_rate (0-100, step 10), tổng số review trong mỗi bin
-    bins = list(range(0, 101, 10))  # [0,10,20,...,100]
-    # chuyển về % để dễ hiểu
-    pr_pct = (df["positive_rate"].fillna(0) * 100.0).clip(0, 100)
-    cats = pd.cut(pr_pct, bins=bins, right=False, include_lowest=True)
-    hist = df.groupby(cats)["total_reviews"].sum().to_dict()
-    # chuẩn hóa key: "0-10", "10-20", ...
-    hist_out = {}
-    for interval, val in hist.items():
-        if pd.isna(val):
+
+def _get_revenue_reviews_data(df, top_n):
+    """Xử lý dữ liệu reviews cho revenue mode."""
+    # Scatter: revenue vs copies sold
+    top_games_by_revenue = df.sort_values("revenue", ascending=False).head(top_n).copy()
+    top_games_by_revenue["store_url"] = top_games_by_revenue["appid"].apply(
+        lambda app_id: f"https://store.steampowered.com/app/{int(app_id)}/"
+    )
+    scatter_points = top_games_by_revenue[
+        ["appid", "name", "revenue", "copies_sold", "price", "review_score", "store_url"]
+    ].copy()
+    scatter_points = scatter_points.to_dict(orient="records")
+
+    # Histogram theo review score (0-100, step 10)
+    score_bins = list(range(0, 101, 10))
+    review_scores = df["review_score"].fillna(0).clip(0, 100)
+    binned_scores = pd.cut(review_scores, bins=score_bins, right=False, include_lowest=True)
+    histogram_data = df.groupby(binned_scores)["revenue"].sum().to_dict()
+    
+    formatted_histogram = _format_histogram_intervals(histogram_data, is_float=True)
+    
+    return jsonify({"points": scatter_points, "hist": formatted_histogram})
+
+
+def _get_normal_reviews_data(df, top_n):
+    """Xử lý dữ liệu reviews cho normal mode."""
+    # Scatter: positive_rate vs total_reviews
+    top_games_by_reviews = df.sort_values("total_reviews", ascending=False).head(top_n).copy()
+    top_games_by_reviews["store_url"] = top_games_by_reviews["appid"].apply(
+        lambda app_id: f"https://store.steampowered.com/app/{int(app_id)}/"
+    )
+    scatter_points = top_games_by_reviews[
+        ["appid", "name", "positive_rate", "total_reviews", "owners", "price", "store_url"]
+    ]
+    scatter_points["positive_rate_pct"] = (scatter_points["positive_rate"] * 100.0).clip(0, 100)
+    scatter_points = scatter_points.to_dict(orient="records")
+
+    # Histogram theo bin của positive_rate (0-100, step 10)
+    score_bins = list(range(0, 101, 10))
+    positive_rate_percent = (df["positive_rate"].fillna(0) * 100.0).clip(0, 100)
+    binned_rates = pd.cut(positive_rate_percent, bins=score_bins, right=False, include_lowest=True)
+    histogram_data = df.groupby(binned_rates)["total_reviews"].sum().to_dict()
+    
+    formatted_histogram = _format_histogram_intervals(histogram_data, is_float=False)
+    
+    return jsonify({"points": scatter_points, "hist": formatted_histogram})
+
+
+def _format_histogram_intervals(histogram_data, is_float=False):
+    """Format histogram intervals thành dictionary với key dạng "left-right"."""
+    formatted_histogram = {}
+    for interval, value in histogram_data.items():
+        if pd.isna(value):
             continue
-        left = int(interval.left)
-        right = int(interval.right)
-        hist_out[f"{left}-{right}"] = int(val)
-
-    return jsonify({"points": points, "hist": hist_out})
+        left_bound = int(interval.left)
+        right_bound = int(interval.right)
+        formatted_histogram[f"{left_bound}-{right_bound}"] = float(value) if is_float else int(value)
+    return formatted_histogram
 
 
 @app.route("/api/suggest")
@@ -389,26 +543,31 @@ def suggest():
     """Gợi ý tên game dựa trên từ khóa 'q'. Trả về tối đa n kết quả theo total_reviews hoặc popularity.
     Tôn trọng các filter khác (genre/start/end/price...).
     """
-    df = load_df()
+    use_revenue = request.args.get("revenue_mode", "false").lower() == "true"
+    df = load_df(use_revenue=use_revenue)
     # Áp dụng các filter khác trước (ngoại trừ q, vì q đang dùng cho gợi ý)
     params = request.args.to_dict(flat=True).copy()
-    q = params.pop("q", None)
-    df = apply_filters(df, params)
-    if not q:
+    search_query = params.pop("q", None)
+    filtered_df = apply_filters(df, params, is_revenue=use_revenue)
+    
+    if not search_query:
         return jsonify([])
-    n = int(request.args.get("n", 8))
-    mask = df["name"].astype(str).str.contains(q, case=False, na=False)
-    sub = df[mask].copy()
-    if sub.empty:
+    
+    max_results = int(request.args.get("n", 8))
+    name_filter_mask = filtered_df["name"].astype(str).str.contains(search_query, case=False, na=False)
+    matching_games = filtered_df[name_filter_mask].copy()
+    
+    if matching_games.empty:
         return jsonify([])
-    # Sắp xếp ưu tiên nhiều review hơn, sau đó popularity
-    if "total_reviews" in sub.columns:
-        sub = sub.sort_values(["total_reviews", "popularity"], ascending=False)
-    else:
-        sub = sub.sort_values("popularity", ascending=False)
-    sub = sub.head(n)
-    sub["store_url"] = sub["appid"].apply(lambda a: f"https://store.steampowered.com/app/{int(a)}/")
-    return jsonify(sub[["appid", "name", "price", "store_url"]].to_dict(orient="records"))
+    
+    # Sắp xếp ưu tiên nhiều review hơn, sau đó popularity (độ nổi tiếng, phổ biến trò chơi)
+    sort_columns = ["total_reviews", "popularity"] if "total_reviews" in matching_games.columns else ["popularity"]
+    matching_games = matching_games.sort_values(sort_columns, ascending=False).head(max_results)
+    matching_games["store_url"] = matching_games["appid"].apply(
+        lambda app_id: f"https://store.steampowered.com/app/{int(app_id)}/"
+    )
+    
+    return jsonify(matching_games[["appid", "name", "price", "store_url"]].to_dict(orient="records"))
 
 
 @app.route("/api/export")
@@ -416,11 +575,11 @@ def export_csv():
     """Xuất dữ liệu lọc hiện tại ra CSV."""
     df = load_df()
     df = apply_filters(df, request.args)
-    buf = io.StringIO()
-    df.to_csv(buf, index=False)
-    buf.seek(0)
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
     return send_file(
-        io.BytesIO(buf.getvalue().encode("utf-8")),
+        io.BytesIO(csv_buffer.getvalue().encode("utf-8")),
         mimetype="text/csv",
         as_attachment=True,
         download_name="export_filtered.csv",
