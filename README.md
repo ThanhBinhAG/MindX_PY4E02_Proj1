@@ -93,4 +93,3 @@ mini-game-dashboard/
 
 ## Tác giả
 by Light.
-MindX Project - Py4E02
