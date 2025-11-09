@@ -8,7 +8,8 @@ Dashboard phân tích dữ liệu game Steam với giao diện trực quan, hỗ
 - 🎮 **Chế độ xem thông thường**: Xem dữ liệu game theo popularity, thể loại, đánh giá
 - 💰 **Chế độ doanh thu**: Xem dữ liệu doanh thu, bản bán, phân loại theo publisher
 - 🔍 **Tìm kiếm và lọc**: Lọc theo thể loại, năm, giá, tìm kiếm game
-- 📈 **Nhiều loại biểu đồ**: Bar chart, Line chart, Pie chart, Scatter chart
+- 📈 **Nhiều loại biểu đồ**: Bar chart, Line chart, Pie/Doughnut chart
+- 💾 **Tải xuống biểu đồ**: Xuất biểu đồ dưới dạng PNG
 
 ## Cài đặt
 
@@ -58,13 +59,13 @@ mini-game-dashboard/
 ### Chế độ xem thông thường
 - Xem top 10 game phổ biến
 - Biểu đồ số lượng game theo năm (2013-2019)
-- Phân bố theo thể loại
-- Đánh giá vs lượt đánh giá
+- Phân bố theo thể loại (Top 8)
 
 ### Chế độ doanh thu
 - Bật toggle "Chế độ doanh thu" ở góc trên bên phải
 - Xem top 10 game theo doanh thu
-- Phân bố doanh thu theo loại publisher
+- Biểu đồ doanh thu theo loại publisher (Bar chart)
+- Phân bố doanh thu theo loại publisher (Doughnut chart - Top 8)
 - Tổng doanh thu và tổng bản bán
 
 ### Lọc dữ liệu
@@ -93,4 +94,3 @@ mini-game-dashboard/
 
 ## Tác giả
 by Light.
-MindX Project - Py4E02

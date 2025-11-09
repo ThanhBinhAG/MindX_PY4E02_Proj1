@@ -34,10 +34,11 @@
     }
 
     header {
-      padding: 16px 30px;
+      padding: 18px 30px;
       background: var(--bg-medium);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      border-bottom: 1px solid var(--bg-light);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
     }
     
     header h1 {
@@ -116,8 +117,14 @@
       margin-bottom: 24px;
       align-items: center;
       background: var(--bg-medium);
-      padding: 16px;
-      border-radius: 10px;
+      padding: 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      transition: opacity 0.3s, max-height 0.3s;
+    }
+    .filters.hidden {
+      display: none;
     }
     
     .filters label {
@@ -149,7 +156,7 @@
       background: var(--bg-dark);
       color: var(--text-primary);
       font-size: 14px;
-      font-family: 'Poppins', sans-serif;
+      /* font-family: 'Poppins', sans-serif; */
       transition: border-color 0.2s, box-shadow 0.2s;
     }
     
@@ -174,19 +181,27 @@
       gap: 16px;
       background: var(--bg-medium);
       padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       transition: transform 0.2s, box-shadow 0.2s;
+      border: 1px solid rgba(255,255,255,0.05);
     }
 
     .card:hover { 
       transform: translateY(-4px); 
-      box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+      border-color: rgba(96,165,250,0.3);
     }
     
     .card-icon {
       font-size: 2.5rem;
       line-height: 1;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      transition: transform 0.2s;
+    }
+    
+    .card:hover .card-icon {
+      transform: scale(1.1);
     }
     
     .card-content {
@@ -201,7 +216,7 @@
     }
     
     .card-value {
-      font-size: 24px;
+      /* font-size: 24px; */
       font-weight: 600;
       color: var(--text-primary);
       line-height: 1.2;
@@ -216,30 +231,86 @@
     
     .chart-container {
       background: var(--bg-medium);
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      /* Đặt chiều cao cho thẻ chứa */
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
       position: relative;
+      transition: transform 0.2s, box-shadow 0.2s;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    
+    .chart-container:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+    }
+    
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--bg-light);
+    }
+    
+    .chart-container h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    
+    .chart-download-btn {
+      background: var(--bg-dark);
+      border: 1px solid var(--bg-light);
+      color: var(--accent-blue);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .chart-download-btn:hover {
+      background: var(--bg-light);
+      border-color: var(--accent-blue);
+      transform: scale(1.05);
+    }
+    
+    .chart-download-btn:active {
+      transform: scale(0.98);
     }
     
     /* Gán chiều cao khác nhau cho các loại biểu đồ */
     .chart-container.chart-bar {
-      grid-column: span 3; /* Biểu đồ Bar chiếm 3 cột */
-      height: 350px;
+      grid-column: span 3;
+      height: 400px;
+      overflow: hidden;
     }
     .chart-container.chart-line {
-      grid-column: span 2; /* Biểu đồ Line chiếm 2 cột */
-      height: 300px;
+      grid-column: span 3;
+      height: 400px;
+      overflow: hidden;
     }
     .chart-container.chart-pie {
-      grid-column: span 1; /* Biểu đồ Pie chiếm 1 cột */
-      height: 300px;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      grid-column: span 3;
+      height: 400px;
+      overflow: hidden;
+    }
+    .chart-container.chart-revenue-split {
+      grid-column: span 3;
+      height: 400px;
+      overflow: hidden;
+    }
+    .chart-grid.revenue-mode {
+      grid-template-columns: repeat(6, 1fr);
+    }
+    .chart-grid.revenue-mode .chart-container.chart-bar {
+      grid-column: span 6;
     }
     
     .chart-container.chart-pie canvas {
@@ -247,44 +318,36 @@
       max-height: 100%;
       padding: 10px;
     }
-    
-    .chart-container h3 {
-      margin-top: 0;
-      margin-bottom: 16px;
-      font-size: 16px; /*18*/
-      font-weight: 500;
-      color: var(--text-primary);
-    }
 
     /* Canvas sẽ lấp đầy thẻ chứa nó */
-    canvas {
-      width: 100%;
-      height: 100%;
+    .chart-container canvas {
+      max-width: 100%;
+      max-height: 100%;
     }
 
     /* === RESPONSIVE === */
     @media (max-width: 900px) {
-      .chart-container.chart-line {
-        grid-column: span 3; /* Chiếm toàn bộ chiều rộng */
-      }
+      .chart-container.chart-bar,
+      .chart-container.chart-line,
       .chart-container.chart-pie {
-        grid-column: span 3; /* Chiếm toàn bộ chiều rộng */
+        height: 450px;
       }
     }
     
     @media (max-width: 768px) {
       main { padding: 16px; }
-      .kpi-grid {
-        grid-template-columns: 1fr; /* 1 cột trên di động */
-      }
+      .kpi-grid,
       .chart-grid {
-        grid-template-columns: 1fr; /* 1 cột trên di động */
+        grid-template-columns: 1fr;
       }
-      /* Reset grid span trên di động */
       .chart-container.chart-bar,
       .chart-container.chart-line,
       .chart-container.chart-pie {
         grid-column: span 1;
+        height: 500px;
+      }
+      .chart-container {
+        padding: 16px;
       }
     }
 
@@ -305,9 +368,9 @@
     }
     .btn:hover { box-shadow: 0 0 0 3px rgba(96,165,250,.2); border-color: var(--accent-blue); }
     .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
     .btn.primary { border-color: var(--accent-green); color: var(--accent-green); }
     .btn.secondary { border-color: var(--accent-blue); color: var(--accent-blue); }
-    .btn:disabled { opacity: .6; cursor: not-allowed; }
     .btn.loading { position: relative; color: transparent; }
     .btn.loading::after {
       content: '';
@@ -422,31 +485,55 @@
       </div>
     </div>
 
-    <div class="chart-grid">
+    <div class="chart-grid" id="chart-grid">
       
       <div class="chart-container chart-bar" id="top-chart-container">
-        <h3 id="top-chart-title">Top 10 Game phổ biến</h3>
+        <div class="chart-header">
+          <h3 id="top-chart-title">Top 10 Game phổ biến</h3>
+          <button class="chart-download-btn" onclick="downloadChart('topChart', 'top-10-games')">
+            <span>⬇️</span> Tải xuống
+          </button>
+        </div>
         <canvas id="topChart"></canvas>
       </div>
       
       <div class="chart-container chart-line" id="series-chart-container">
-        <h3 id="series-chart-title">Số lượng Game theo năm</h3>
+        <div class="chart-header">
+          <h3 id="series-chart-title">Số lượng Game theo năm</h3>
+          <button class="chart-download-btn" onclick="downloadChart('seriesChart', 'games-by-year')">
+            <span>⬇️</span> Tải xuống
+          </button>
+        </div>
         <canvas id="seriesChart"></canvas>
       </div>
 
-      <div class="chart-container chart-pie">
-        <h3 id="pie-chart-title">Tỷ lệ Thể loại (Top 8)</h3>
+      <div class="chart-container chart-pie" id="pie-chart-container">
+        <div class="chart-header">
+          <h3 id="pie-chart-title">Tỷ lệ Thể loại (Top 8)</h3>
+          <button class="chart-download-btn" onclick="downloadChart('pieChart', 'genre-distribution')">
+            <span>⬇️</span> Tải xuống
+          </button>
+        </div>
         <canvas id="pieChart"></canvas>
       </div>
 
-      <div class="chart-container chart-line" id="review-chart-container">
-        <h3>Đánh giá vs Lượt đánh giá</h3>
-        <canvas id="reviewChart"></canvas>
-      </div>
-      
       <!-- Revenue Charts (hidden by default) -->
-      <div class="chart-container chart-line" id="revenue-class-chart-container" style="display: none;">
-        <h3>Doanh thu theo Loại Publisher</h3>
+      <div class="chart-container chart-revenue-split" id="revenue-pie-chart-container" style="display: none;">
+        <div class="chart-header">
+          <h3>Doanh thu theo Loại Publisher (Top 8)</h3>
+          <button class="chart-download-btn" onclick="downloadChart('revenuePieChart', 'revenue-publisher-doughnut')">
+            <span>⬇️</span> Tải xuống
+          </button>
+        </div>
+        <canvas id="revenuePieChart"></canvas>
+      </div>
+      <div class="chart-container chart-revenue-split" id="revenue-class-chart-container" style="display: none;">
+        <div class="chart-header">
+          <h3>Doanh thu theo Loại Publisher</h3>
+          <button class="chart-download-btn" onclick="downloadChart('revenueClassChart', 'revenue-by-publisher')">
+            <span>⬇️</span> Tải xuống
+          </button>
+        </div>
         <canvas id="revenueClassChart"></canvas>
       </div>
       
@@ -455,59 +542,54 @@
 
 <script>
 // === CÀI ĐẶT CHART.JS MẶC ĐỊNH ===
-Chart.defaults.color = '#9ca3af'; // Màu chữ mặc định (trục, nhãn)
-Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)'; // Màu lưới
-Chart.defaults.plugins.legend.labels.color = '#f3f4f6'; // Màu chữ của legend
+Chart.defaults.color = '#9ca3af';
+Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+Chart.defaults.plugins.legend.labels.color = '#f3f4f6';
 Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0, 0, 0, 0.8)';
 Chart.defaults.plugins.tooltip.titleColor = '#f3f4f6';
 Chart.defaults.plugins.tooltip.bodyColor = '#f3f4f6';
 
-const base = location.origin;
-let revenueMode = false;
-const genreSelect = document.getElementById('genreSelect');
-const yearSelect = document.getElementById('yearSelect');
-const qInput = document.getElementById('qInput');
-const minPrice = document.getElementById('minPrice');
-const maxPrice = document.getElementById('maxPrice');
-const resetBtn = document.getElementById('resetBtn');
-const applyBtn = document.getElementById('applyBtn');
-const suggest = document.getElementById('suggest');
-const viewToggle = document.getElementById('viewToggle');
+// === CHỨC NĂNG TẢI BIỂU ĐỒ XUỐNG ===
+function downloadChart(canvasId, filename) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  
+  const url = canvas.toDataURL('image/png');
+  const link = document.createElement('a');
+  link.download = `${filename}-${new Date().toISOString().split('T')[0]}.png`;
+  link.href = url;
+  link.click();
+}
 
-async function fetchJSON(url){ 
-  const response = await fetch(url); 
-  return response.json(); 
+const base = location.origin, el = id => document.getElementById(id);
+let revenueMode = false;
+const genreSelect = el('genreSelect'), yearSelect = el('yearSelect'), qInput = el('qInput');
+const minPrice = el('minPrice'), maxPrice = el('maxPrice'), resetBtn = el('resetBtn');
+const applyBtn = el('applyBtn'), suggest = el('suggest'), viewToggle = el('viewToggle');
+
+const fetchJSON = async url => (await fetch(url)).json();
+
+function addOption(select, value, text) {
+  const opt = document.createElement('option');
+  opt.value = value;
+  opt.textContent = text;
+  select.appendChild(opt);
 }
 
 async function loadFilters(){
-  // Load filters based on current mode
-  const revenueModeParam = revenueMode ? '&revenue_mode=true' : '';
-  const genresData = await fetchJSON(base + '/api/aggregate?by=genre' + revenueModeParam);
-  const yearsData = await fetchJSON(base + '/api/series?metric=count' + revenueModeParam);
+  const param = revenueMode ? '&revenue_mode=true' : '';
+  const [genresData, yearsData] = await Promise.all([
+    fetchJSON(base + '/api/aggregate?by=genre' + param),
+    fetchJSON(base + '/api/series?metric=count' + param)
+  ]);
   
-  // Clear existing options
   genreSelect.innerHTML = '<option value="">Tất cả</option>';
-  
-  // Lấy 30 thể loại đầu (only for normal mode)
   if (!revenueMode) {
-    const topGenres = Object.keys(genresData).slice(0, 30);
-    topGenres.forEach(genreName => {
-      const optionElement = document.createElement('option');
-      optionElement.value = genreName;
-      optionElement.textContent = genreName;
-      genreSelect.appendChild(optionElement);
-    });
+    Object.keys(genresData).slice(0, 30).forEach(g => addOption(genreSelect, g, g));
   }
   
-  // Sắp xếp năm
   yearSelect.innerHTML = '<option value="">Tất cả</option>';
-  const sortedYears = Object.keys(yearsData).sort();
-  sortedYears.forEach(yearLabel => {
-    const optionElement = document.createElement('option');
-    optionElement.value = yearLabel;
-    optionElement.textContent = yearLabel;
-    yearSelect.appendChild(optionElement);
-  });
+  Object.keys(yearsData).sort().forEach(y => addOption(yearSelect, y, y));
 }
 
 function setLoading(isLoading){
@@ -517,68 +599,63 @@ function setLoading(isLoading){
   applyBtn.classList.toggle('loading', isLoading);
 }
 
+function buildParams() {
+  const params = new URLSearchParams();
+  if (revenueMode) params.set('revenue_mode', 'true');
+  
+  // Áp dụng filters cho cả 2 mode
+  if (genreSelect.value && !revenueMode) params.set('genre', genreSelect.value);
+  if (yearSelect.value) {
+    params.set('start', `${yearSelect.value}-01-01`);
+    params.set('end', `${yearSelect.value}-12-31`);
+  }
+  if (qInput.value.trim()) params.set('q', qInput.value.trim());
+  if (minPrice.value) params.set('min_price', minPrice.value);
+  if (maxPrice.value) params.set('max_price', maxPrice.value);
+  return params.toString();
+}
+
+function updateKPICards(summary, mode) {
+  el('total-value').innerText = summary.total_games;
+  el('price-value').innerText = `$${summary.avg_price}`;
+  Object.entries({
+    'owners-card': !mode, 'revenue-card': mode, 'copies-card': mode,
+    'genre-card': !mode, 'publisher-class-card': mode
+  }).forEach(([id, show]) => el(id).style.display = show ? 'flex' : 'none');
+  
+  if (mode) {
+    el('publisher-class-value').innerText = summary.top_publisher_class || 'N/A';
+    el('revenue-value').innerText = `$${(summary.total_revenue / 1000000).toFixed(2)}M`;
+    el('copies-value').innerText = summary.total_copies.toLocaleString();
+  } else {
+    el('genre-value').innerText = summary.top_genre || 'N/A';
+    el('owners-value').innerText = summary.total_owners.toLocaleString();
+  }
+}
+
 async function updateDashboard(){
   setLoading(true);
-  const genre = genreSelect.value;
-  const year = yearSelect.value;
-  const q = qInput.value.trim();
-  const minP = minPrice.value;
-  const maxP = maxPrice.value;
-  let params = revenueMode ? '&revenue_mode=true' : '';
-  if(genre) params += `&genre=${encodeURIComponent(genre)}`;
-  if(year) params += `&start=${year}-01-01&end=${year}-12-31`;
-  if(q) params += `&q=${encodeURIComponent(q)}`;
-  if(minP) params += `&min_price=${encodeURIComponent(minP)}`;
-  if(maxP) params += `&max_price=${encodeURIComponent(maxP)}`;
-
+  const params = buildParams();
   try {
     if (revenueMode) {
       const [summary, top, series, agg, revenueAnalytics] = await Promise.all([
         fetchJSON(base + '/api/stats/summary?' + params),
-        fetchJSON(base + '/api/top?metric=revenue&n=10' + params),
-        fetchJSON(base + '/api/series?metric=revenue' + params),
-        fetchJSON(base + '/api/aggregate?by=publisher_class' + params),
-        fetchJSON(base + '/api/revenue/analytics?n=10' + params)
+        fetchJSON(base + '/api/top?metric=revenue&n=10&' + params),
+        fetchJSON(base + '/api/series?metric=revenue&' + params),
+        fetchJSON(base + '/api/aggregate?by=publisher_class&' + params),
+        fetchJSON(base + '/api/revenue/analytics?n=10&' + params)
       ]);
-      
-      // Cập nhật KPI cho revenue mode
-      document.getElementById('total-value').innerText = summary.total_games;
-      document.getElementById('price-value').innerText = `$${summary.avg_price}`;
-      document.getElementById('publisher-class-value').innerText = summary.top_publisher_class || 'N/A';
-      document.getElementById('revenue-value').innerText = `$${(summary.total_revenue / 1000000).toFixed(2)}M`;
-      document.getElementById('copies-value').innerText = summary.total_copies.toLocaleString();
-      
-      // Hiển thị/ẩn cards
-      document.getElementById('owners-card').style.display = 'none';
-      document.getElementById('revenue-card').style.display = 'flex';
-      document.getElementById('copies-card').style.display = 'flex';
-      document.getElementById('genre-card').style.display = 'none';
-      document.getElementById('publisher-class-card').style.display = 'flex';
-      
+      updateKPICards(summary, true);
       renderRevenueCharts(revenueAnalytics.top_by_revenue, revenueAnalytics.revenue_by_class, top, series);
     } else {
-      const [summary, top, series, agg, reviews] = await Promise.all([
+      const [summary, top, series, agg] = await Promise.all([
         fetchJSON(base + '/api/stats/summary?' + params),
-        fetchJSON(base + '/api/top?metric=popularity&n=10' + params),
-        fetchJSON(base + '/api/series?metric=count' + params),
-        fetchJSON(base + '/api/aggregate?by=genre' + params),
-        fetchJSON(base + '/api/reviews?n=50' + params)
+        fetchJSON(base + '/api/top?metric=popularity&n=10&' + params),
+        fetchJSON(base + '/api/series?metric=count&' + params),
+        fetchJSON(base + '/api/aggregate?by=genre&' + params)
       ]);
-      
-      // Cập nhật KPI cho normal mode
-      document.getElementById('total-value').innerText = summary.total_games;
-      document.getElementById('price-value').innerText = `$${summary.avg_price}`;
-      document.getElementById('genre-value').innerText = summary.top_genre || 'N/A';
-      document.getElementById('owners-value').innerText = summary.total_owners.toLocaleString();
-      
-      // Hiển thị/ẩn cards
-      document.getElementById('owners-card').style.display = 'flex';
-      document.getElementById('revenue-card').style.display = 'none';
-      document.getElementById('copies-card').style.display = 'none';
-      document.getElementById('genre-card').style.display = 'flex';
-      document.getElementById('publisher-class-card').style.display = 'none';
-      
-      renderCharts(top, series, agg, reviews);
+      updateKPICards(summary, false);
+      renderCharts(top, series, agg);
     }
   } finally {
     setLoading(false);
@@ -587,9 +664,14 @@ async function updateDashboard(){
 
 let charts = [];
 
+function toggleFiltersVisibility() {
+  document.querySelector('.filters')?.classList.remove('hidden');
+}
+
 function toggleViewMode() {
   revenueMode = !revenueMode;
   viewToggle.classList.toggle('active', revenueMode);
+  toggleFiltersVisibility();
   loadFilters().then(updateDashboard);
 }
 
@@ -606,16 +688,15 @@ function renderRevenueCharts(topByRevenue, revenueByClass, top, series) {
   charts.forEach(c => c.destroy());
   charts = [];
   
-  // Ẩn normal charts, hiện revenue charts
-  document.getElementById('review-chart-container').style.display = 'none';
-  document.getElementById('series-chart-container').style.display = 'none'; // Ẩn biểu đồ doanh thu theo năm
-  document.getElementById('top-chart-container').style.display = 'block';
-  document.getElementById('top-chart-title').textContent = 'Top 10 Game theo Doanh thu';
-  document.getElementById('revenue-class-chart-container').style.display = 'block';
-  document.getElementById('pie-chart-title').textContent = 'Doanh thu theo Loại Publisher (Top 8)';
+  el('series-chart-container').style.display = 'none';
+  el('pie-chart-container').style.display = 'none';
+  el('chart-grid').classList.add('revenue-mode');
+  el('top-chart-container').style.display = 'block';
+  el('top-chart-title').textContent = 'Top 10 Game theo Doanh thu';
+  el('revenue-pie-chart-container').style.display = 'block';
+  el('revenue-class-chart-container').style.display = 'block';
   
-  // 1. Top games by revenue (Bar chart) - reuse topChart canvas
-  const revenueTopChartContext = document.getElementById('topChart').getContext('2d');
+  const revenueTopChartContext = el('topChart').getContext('2d');
   const revenueChartGradient = revenueTopChartContext.createLinearGradient(0, 0, 0, revenueTopChartContext.canvas.clientHeight);
   revenueChartGradient.addColorStop(0, 'rgba(52, 211, 153, 0.8)'); // accent-green
   revenueChartGradient.addColorStop(1, 'rgba(52, 211, 153, 0.2)');
@@ -623,7 +704,10 @@ function renderRevenueCharts(topByRevenue, revenueByClass, top, series) {
   charts.push(new Chart(revenueTopChartContext, {
     type: 'bar',
     data: {
-      labels: topByRevenue.map(x => x.name.length > 20 ? x.name.substring(0, 20) + '...' : x.name),
+      labels: topByRevenue.map(x => {
+        if (x.name.length > 25) return x.name.substring(0, 22) + '...';
+        return x.name;
+      }),
       datasets: [{
         label: 'Doanh thu ($)',
         data: topByRevenue.map(x => x.revenue),
@@ -654,11 +738,23 @@ function renderRevenueCharts(topByRevenue, revenueByClass, top, series) {
         }
       },
       scales: {
-        x: { grid: { display: false } },
+        x: { 
+          grid: { display: false },
+          ticks: {
+            maxRotation: 45,
+            minRotation: 45,
+            font: { size: 11 },
+            maxTicksLimit: 10,
+            autoSkip: true,
+            padding: 8
+          }
+        },
         y: {
           grid: { color: 'rgba(255, 255, 255, 0.1)' },
           ticks: {
-            callback: (value) => `$${(value / 1000000).toFixed(1)}M`
+            callback: (value) => `$${(value / 1000000).toFixed(1)}M`,
+            font: { size: 11 },
+            padding: 8
           }
         }
       },
@@ -667,15 +763,13 @@ function renderRevenueCharts(topByRevenue, revenueByClass, top, series) {
         const itemIndex = elements[0].index;
         const gameItem = topByRevenue[itemIndex];
         if (gameItem && gameItem.appid) {
-          const storeUrl = gameItem.store_url || (`https://store.steampowered.com/app/${gameItem.appid}/`);
-          window.open(storeUrl, '_blank');
+          window.open(gameItem.store_url || `https://store.steampowered.com/app/${gameItem.appid}/`, '_blank');
         }
       }
     }
   }));
   
-  // 2. Revenue by publisher class (Vertical Bar chart - full width)
-  const revenueClassChartContext = document.getElementById('revenueClassChart').getContext('2d');
+  const revenueClassChartContext = el('revenueClassChart').getContext('2d');
   const sortedPublisherClasses = Object.keys(revenueByClass).sort((a, b) => revenueByClass[b] - revenueByClass[a]);
   const barChartGradient = revenueClassChartContext.createLinearGradient(0, 0, 0, revenueClassChartContext.canvas.clientHeight);
   barChartGradient.addColorStop(0, 'rgba(52, 211, 153, 0.8)');
@@ -712,22 +806,27 @@ function renderRevenueCharts(topByRevenue, revenueByClass, top, series) {
       },
       scales: {
         x: { 
-          grid: { display: false }
+          grid: { display: false },
+          ticks: {
+            font: { size: 12 },
+            padding: 10
+          }
         },
         y: {
           grid: { color: 'rgba(255, 255, 255, 0.1)' },
           ticks: {
-            callback: (value) => `$${(value / 1000000).toFixed(1)}M`
+            callback: (value) => `$${(value / 1000000).toFixed(1)}M`,
+            font: { size: 11 },
+            padding: 8
           }
         }
       }
     }
   }));
   
-  // 3. Pie chart area - show publisher class by revenue (top 8)
-  const pieChartContext = document.getElementById('pieChart').getContext('2d');
+  const revenuePieChartContext = el('revenuePieChart').getContext('2d');
   const publisherClassNames = Object.keys(revenueByClass).sort((a, b) => revenueByClass[b] - revenueByClass[a]).slice(0, 8);
-  charts.push(new Chart(pieChartContext, {
+  charts.push(new Chart(revenuePieChartContext, {
     type: 'doughnut',
     data: {
       labels: publisherClassNames,
@@ -782,24 +881,24 @@ function renderRevenueCharts(topByRevenue, revenueByClass, top, series) {
   }));
 }
 
-function renderCharts(top, series, agg, reviews){
+function renderCharts(top, series, agg){
   // Xóa các biểu đồ cũ trước khi vẽ mới
   charts.forEach(c=>c.destroy());
   charts = [];
   
-  // Hiện normal charts, ẩn revenue charts
-  document.getElementById('review-chart-container').style.display = 'block';
-  document.getElementById('series-chart-container').style.display = 'block';
-  document.getElementById('top-chart-container').style.display = 'block';
-  document.getElementById('top-chart-title').textContent = 'Top 10 Game phổ biến';
-  document.getElementById('revenue-class-chart-container').style.display = 'none';
-  document.getElementById('series-chart-title').textContent = 'Số lượng Game theo năm';
-  document.getElementById('pie-chart-title').textContent = 'Tỷ lệ Thể loại (Top 8)';
+  el('chart-grid').classList.remove('revenue-mode');
+  el('series-chart-container').style.display = 'block';
+  el('pie-chart-container').style.display = 'block';
+  el('top-chart-container').style.display = 'block';
+  el('top-chart-title').textContent = 'Top 10 Game phổ biến';
+  el('revenue-pie-chart-container').style.display = 'none';
+  el('revenue-class-chart-container').style.display = 'none';
+  el('series-chart-title').textContent = 'Số lượng Game theo năm';
+  el('pie-chart-title').textContent = 'Tỷ lệ Thể loại (Top 8)';
 
-  const topChartContext = document.getElementById('topChart').getContext('2d');
-  const seriesChartContext = document.getElementById('seriesChart').getContext('2d');
-  const pieChartContext = document.getElementById('pieChart').getContext('2d');
-  const reviewChartContext = document.getElementById('reviewChart').getContext('2d');
+  const topChartContext = el('topChart').getContext('2d');
+  const seriesChartContext = el('seriesChart').getContext('2d');
+  const pieChartContext = el('pieChart').getContext('2d');
 
   // Màu Gradient cho biểu đồ Bar
   const topChartGradient = topChartContext.createLinearGradient(0, 0, 0, topChartContext.canvas.clientHeight);
@@ -810,7 +909,7 @@ function renderCharts(top, series, agg, reviews){
   charts.push(new Chart(topChartContext, {
     type: 'bar',
     data: {
-      labels: top.map(x => x.name.length > 20 ? x.name.substring(0, 20) + '...' : x.name), // Cắt bớt tên dài
+      labels: top.map(x => x.name),
       datasets: [{
         label: 'Popularity', 
         data: top.map(x => x.popularity), 
@@ -823,6 +922,11 @@ function renderCharts(top, series, agg, reviews){
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          bottom: 20
+        }
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -838,16 +942,27 @@ function renderCharts(top, series, agg, reviews){
         }
       },
       scales: {
-        x: { grid: { display: false } },
-        y: { grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+        x: {
+          grid: { display: false },
+          ticks: {
+            maxRotation: 45,
+            minRotation: 45,
+            font: { size: 11 },
+            padding: 10,
+            autoSkip: false
+          }
+        },
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.1)' },
+          ticks: { font: { size: 11 } }
+        }
       },
       onClick: (event, elements) => {
         if (!elements || elements.length === 0) return;
         const itemIndex = elements[0].index;
         const gameItem = top[itemIndex];
         if (gameItem && gameItem.appid) {
-          const storeUrl = gameItem.store_url || (`https://store.steampowered.com/app/${gameItem.appid}/`);
-          window.open(storeUrl, '_blank');
+          window.open(gameItem.store_url || `https://store.steampowered.com/app/${gameItem.appid}/`, '_blank');
         }
       }
     }
@@ -881,106 +996,50 @@ function renderCharts(top, series, agg, reviews){
     }
   }));
 
-  // 3. Biểu đồ thể loại (Pie)
-  const topGenres = Object.keys(agg).sort((a, b) => agg[b] - agg[a]).slice(0, 8); // Sắp xếp và lấy 8 top
+  // 3. Biểu đồ thể loại (Horizontal Bar)
+  const topGenres = Object.keys(agg).sort((a, b) => agg[b] - agg[a]).slice(0, 8);
+  const genreGradient = pieChartContext.createLinearGradient(0, 0, pieChartContext.canvas.clientWidth, 0);
+  genreGradient.addColorStop(0, 'rgba(96, 165, 250, 0.8)');
+  genreGradient.addColorStop(1, 'rgba(96, 165, 250, 0.2)');
+  
   charts.push(new Chart(pieChartContext, {
-    type: 'doughnut', // 'pie' hoặc 'doughnut'
+    type: 'bar',
     data: {
-      labels: topGenres, 
+      labels: topGenres,
       datasets: [{
-        data: topGenres.map(genreName => agg[genreName]), 
-        backgroundColor: [
-          '#f87171', '#facc15', '#34d399', '#60a5fa', 
-          '#a78bfa', '#f472b6', '#fb923c', '#4ade80'
-        ],
-        borderWidth: 2,
-        borderColor: 'var(--bg-dark)'
+        label: 'Số lượng',
+        data: topGenres.map(genreName => agg[genreName]),
+        backgroundColor: genreGradient,
+        borderColor: '#60a5fa',
+        borderWidth: 1,
+        borderRadius: 4
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 1.2,
-      layout: {
-        padding: {
-          top: 10,
-          bottom: 10,
-          left: 10,
-          right: 10
-        }
-      },
-      plugins: {
-        legend: { 
-          position: 'right',
-          align: 'center',
-          labels: {
-            boxWidth: 14,
-            padding: 12,
-            font: {
-              size: 12
-            },
-            usePointStyle: true,
-            pointStyle: 'circle'
-          }
-        }
-      }
-    }
-  }));
-
-  // 4. Scatter: Positive Rate vs Total Reviews
-  const reviewPoints = reviews.points || [];
-  charts.push(new Chart(reviewChartContext, {
-    type: 'scatter',
-    data: {
-      datasets: [{
-        label: 'Game (Top theo lượt đánh giá)',
-        data: reviewPoints.map(point => ({ 
-          x: point.positive_rate_pct, 
-          y: point.total_reviews, 
-          appid: point.appid, 
-          name: point.name, 
-          price: point.price, 
-          store_url: point.store_url 
-        })),
-        pointBackgroundColor: '#f59e0b',
-        pointBorderColor: '#fbbf24',
-        pointRadius: 4
-      }]
-    },
-    options: {
+      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      scales: {
-        x: {
-          title: { display: true, text: 'Tỉ lệ đánh giá tích cực (%)' },
-          min: 0, max: 100
-        },
-        y: {
-          title: { display: true, text: 'Tổng lượt đánh giá' },
-          type: 'logarithmic',
-          ticks: { callback: (v) => Number(v).toLocaleString() }
-        }
-      },
       plugins: {
+        legend: { display: false },
         tooltip: {
           callbacks: {
             label: (context) => {
-              const dataPoint = context.raw;
-              const positiveRate = (dataPoint.x ?? 0).toFixed(1) + '%';
-              const totalReviews = (dataPoint.y ?? 0).toLocaleString();
-              const gamePrice = (dataPoint.price != null) ? `$${dataPoint.price}` : 'N/A';
-              return `${dataPoint.name} — ${positiveRate}, ${totalReviews} reviews, ${gamePrice}`;
+              const value = context.parsed.x;
+              const total = Object.values(agg).reduce((a, b) => a + b, 0);
+              const percentage = ((value / total) * 100).toFixed(1);
+              return `${context.label}: ${value.toLocaleString()} (${percentage}%)`;
             }
           }
         }
       },
-      onClick: (event, elements) => {
-        if (!elements || elements.length === 0) return;
-        const clickedElement = elements[0];
-        const dataPoint = clickedElement.element.$context.raw;
-        if (dataPoint && dataPoint.appid) {
-          const storeUrl = dataPoint.store_url || (`https://store.steampowered.com/app/${dataPoint.appid}/`);
-          window.open(storeUrl, '_blank');
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.1)' },
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
         }
       }
     }
@@ -988,67 +1047,57 @@ function renderCharts(top, series, agg, reviews){
 }
 
 // === KHỞI CHẠY ===
-genreSelect.addEventListener('change', updateDashboard);
-yearSelect.addEventListener('change', updateDashboard);
-qInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') updateDashboard(); });
-minPrice.addEventListener('change', updateDashboard);
-maxPrice.addEventListener('change', updateDashboard);
+[genreSelect, yearSelect, minPrice, maxPrice].forEach(el => el.addEventListener('change', updateDashboard));
+qInput.addEventListener('keydown', e => { if(e.key==='Enter') updateDashboard(); });
 applyBtn.addEventListener('click', updateDashboard);
-resetBtn.addEventListener('click', ()=>{
-  genreSelect.value = '';
-  yearSelect.value = '';
-  qInput.value = '';
-  minPrice.value = '';
-  maxPrice.value = '';
+resetBtn.addEventListener('click', () => {
+  [genreSelect, yearSelect, qInput, minPrice, maxPrice].forEach(el => el.value = '');
   updateDashboard();
 });
 
-// ==== Autocomplete gợi ý tên game ====
 let suggestTimer;
 async function loadSuggest(){
   const q = qInput.value.trim();
   if(!q){ suggest.style.display='none'; suggest.innerHTML=''; return; }
-  const genre = genreSelect.value;
-  const year = yearSelect.value;
-  let params = `?q=${encodeURIComponent(q)}`;
-  if(genre) params += `&genre=${encodeURIComponent(genre)}`;
-  if(year) params += `&start=${year}-01-01&end=${year}-12-31`;
+  const params = new URLSearchParams({q});
+  if(revenueMode) params.set('revenue_mode', 'true');
+  if(genreSelect.value && !revenueMode) params.set('genre', genreSelect.value);
+  if(yearSelect.value) {
+    params.set('start', `${yearSelect.value}-01-01`);
+    params.set('end', `${yearSelect.value}-12-31`);
+  }
+  if(minPrice.value) params.set('min_price', minPrice.value);
+  if(maxPrice.value) params.set('max_price', maxPrice.value);
   try{
-    const suggestedGames = await fetchJSON(base + '/api/suggest' + params);
-    if(!Array.isArray(suggestedGames) || suggestedGames.length===0){ 
-      suggest.style.display='none'; 
-      suggest.innerHTML=''; 
-      return; 
-    }
-    suggest.innerHTML = suggestedGames.map(gameItem =>
-      `<div class="suggest-item" data-appid="${gameItem.appid}" data-name="${gameItem.name.replace(/"/g,'&quot;')}">`+
-        `<span class="suggest-name">${gameItem.name}</span>`+
-        `<span class="suggest-meta">$${(gameItem.price ?? '—')}</span>`+
-      `</div>`
+    const games = await fetchJSON(base + '/api/suggest?' + params);
+    if(!games?.length){ suggest.style.display='none'; suggest.innerHTML=''; return; }
+    suggest.innerHTML = games.map(g => 
+      `<div class="suggest-item" data-name="${g.name.replace(/"/g,'&quot;')}">
+        <span class="suggest-name">${g.name}</span>
+        <span class="suggest-meta">$${g.price ?? '—'}</span>
+      </div>`
     ).join('');
     suggest.style.display='block';
-  }catch{ /* silent */ }
+  }catch{}
 }
 
-qInput.addEventListener('input', ()=>{
+qInput.addEventListener('input', () => {
   clearTimeout(suggestTimer);
   suggestTimer = setTimeout(loadSuggest, 220);
 });
-
-document.addEventListener('click', (e)=>{
-  if(!suggest.contains(e.target) && e.target!==qInput){ suggest.style.display='none'; }
+document.addEventListener('click', e => {
+  if(!suggest.contains(e.target) && e.target!==qInput) suggest.style.display='none';
 });
-
-suggest.addEventListener('click', (e)=>{
+suggest.addEventListener('click', e => {
   const item = e.target.closest('.suggest-item');
   if(!item) return;
-  const name = item.getAttribute('data-name');
-  qInput.value = name || '';
+  qInput.value = item.getAttribute('data-name') || '';
   suggest.style.display='none';
   updateDashboard();
 });
 
 // Tải bộ lọc, sau đó tải dữ liệu dashboard
+toggleFiltersVisibility();
 loadFilters().then(updateDashboard);
 </script>
 </body>
