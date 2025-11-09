@@ -174,7 +174,7 @@ def summary():
     return jsonify(base)
 
 
-@app.route("/api/top")
+@app.route("/api/top") #Top games theo doanh thu hoặc số lượng owners
 def top_games():
     params = request.args
     use_revenue = params.get("revenue_mode", "false").lower() == "true"
@@ -196,7 +196,7 @@ def top_games():
     return jsonify(top[[c for c in cols if c in top.columns]].to_dict("records"))
 
 
-@app.route("/api/series")
+@app.route("/api/series") #Dữ liệu time-series theo năm ưu tiên cho chế độ thường hơn là doanh thu (do có mỗi 1 năm)
 def series():
     params = request.args
     use_revenue = params.get("revenue_mode", "false").lower() == "true"
@@ -213,7 +213,7 @@ def series():
     return jsonify({str(int(k)): float(v) for k, v in result.sort_index().items()})
 
 
-@app.route("/api/aggregate")
+@app.route("/api/aggregate") #Phân bố theo thể loại, nhà phát hành, khu vực
 def aggregate():
     params = request.args
     use_revenue = params.get("revenue_mode", "false").lower() == "true"
