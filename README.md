@@ -81,7 +81,6 @@ mini-game-dashboard/
 - `GET /api/series` - Dữ liệu time-series theo năm
 - `GET /api/aggregate` - Phân bố theo genre/publisher/region
 - `GET /api/revenue/analytics` - Analytics cho dữ liệu doanh thu
-- `GET /api/reviews` - Tổng hợp đánh giá
 - `GET /api/suggest` - Gợi ý tên game
 - `GET /api/game/<appid>` - Chi tiết một game
 - `GET /api/export` - Xuất dữ liệu ra CSV

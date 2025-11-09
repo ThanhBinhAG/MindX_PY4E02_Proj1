@@ -60,7 +60,7 @@ def clean_df(df, is_revenue=False):
 
     if is_revenue:
         # Revenue columns
-        for col, src in [("revenue", "revenue"), ("copies_sold", "copiesSold"), ("review_score", "reviewScore"), ("avg_playtime", "avgPlaytime")]:
+        for col, src in [("revenue", "revenue"), ("copies_sold", "copiesSold"), ("avg_playtime", "avgPlaytime")]:
             df[col] = pd.to_numeric(df[src], errors='coerce').fillna(0) if src in df.columns else 0
         
         # String columns
@@ -71,17 +71,10 @@ def clean_df(df, is_revenue=False):
         return df
 
     # Normal dataset
-    pos = next((c for c in df.columns if "positive" in c.lower()), None)
-    neg = next((c for c in df.columns if "negative" in c.lower()), None)
-    df["positive"] = pd.to_numeric(df[pos], errors='coerce').fillna(0) if pos else 0
-    df["negative"] = pd.to_numeric(df[neg], errors='coerce').fillna(0) if neg else 0
-    df["total_reviews"] = df["positive"] + df["negative"]
-    df["positive_rate"] = np.where(df["total_reviews"] > 0, df["positive"] / df["total_reviews"], 0)
-
     owner_col = next((c for c in df.columns if "owner" in c.lower()), None)
     df["owners"] = df[owner_col].apply(parse_owner_range).fillna(0).astype(int) if owner_col else 0
 
-    df["popularity"] = np.log1p(df["owners"]) * (df["positive_rate"] + 0.01)
+    df["popularity"] = np.log1p(df["owners"])
     df["revenue_proxy"] = df["owners"] * df["price"]
 
     play_col = next((c for c in df.columns if "playtime" in c.lower()), None)
@@ -92,17 +85,14 @@ def clean_df(df, is_revenue=False):
 
     # Bins
     df["price_band"] = pd.cut(df["price"], [-np.inf, 0, 5, 15, 30, np.inf],
-                              labels=["Free", "<$5", "$5-$15", "$15-$30", ">$30"], right=False)
+                            labels=["Free", "<$5", "$5-$15", "$15-$30", ">$30"], right=False)
     df["owners_tier"] = pd.cut(df["owners"], [-np.inf, 50_000, 200_000, 1_000_000, np.inf],
-                               labels=["Indie (<50k)", "Mid (50k-200k)", "Hit (200k-1M)", "Blockbuster (>=1M)"], right=False)
-    df["review_band"] = pd.cut(df["positive_rate"], [-np.inf, 0.4, 0.6, 0.8, 0.9, np.inf],
-                               labels=["Negative (<40%)", "Mixed (40-60%)", "Mostly Positive (60-80%)",
-                                       "Very Positive (80-90%)", "Overwhelmingly Positive (>=90%)"], right=True)
+                            labels=["Indie (<50k)", "Mid (50k-200k)", "Hit (200k-1M)", "Blockbuster (>=1M)"], right=False)
 
     return df
 
 
-def parse_owner_range(s):
+def parse_owner_range(s): #ép kiểu chuỗi để in ra giá trị trung bình của range
     """Chuyển '100,000 - 200,000' → trung bình."""
     try:
         nums = re.findall(r'\d+', str(s).replace(',', ''))
@@ -113,32 +103,32 @@ def parse_owner_range(s):
         return 0
 
 
-def apply_filters(df, params, is_revenue=False):
+def apply_filters(df, params, is_revenue=False): #Filter cho người dùng
     """Lọc dữ liệu."""
     df = df.copy()
     date_col = "release_date"
 
-    start = params.get("start") or params.get("start_date")
+    start = params.get("start") or params.get("start_date") #Theo thời gian
     end = params.get("end") or params.get("end_date")
     if start: df = df[df[date_col] >= pd.to_datetime(start, errors='coerce')]
     if end: df = df[df[date_col] <= pd.to_datetime(end, errors='coerce')]
 
-    q = params.get("q")
+    q = params.get("q") #Theo tên
     if q: df = df[df["name"].astype(str).str.contains(q, case=False, na=False)]
 
-    genre = params.get("genre")
+    genre = params.get("genre") #Theo thể loại
     if genre and not is_revenue: df = df[df["genres"].str.contains(genre, case=False, na=False)]
 
-    region = params.get("region")
+    region = params.get("region") #Theo vùng 
     if region: df = df[df["region"].str.contains(region, case=False, na=False)]
 
-    pub = params.get("publisher")
+    pub = params.get("publisher") #Theo nhà xuất bản
     if pub:
         col = "publishers" if is_revenue and "publishers" in df.columns else "publisher"
         if col in df.columns: df = df[df[col].astype(str).str.contains(pub, case=False, na=False)]
 
-    min_p = params.get("min_price")
-    max_p = params.get("max_price")
+    min_p = params.get("min_price") #Theo giá
+    max_p = params.get("max_price") #Theo giá
     if min_p: df = df[df["price"] >= float(min_p)]
     if max_p: df = df[df["price"] <= float(max_p)]
 
@@ -148,10 +138,10 @@ def apply_filters(df, params, is_revenue=False):
     return df
 
 
-def load_and_filter(use_revenue=False, params=None):
+def load_and_filter(use_revenue=False, params=None): #Load và filter dữ liệu
     return apply_filters(get_cached_df(use_revenue), params or request.args.to_dict(), use_revenue)
 
-def get_store_url(appid):
+def get_store_url(appid): #Lấy URL của game
     return f"https://store.steampowered.com/app/{int(appid)}/"
 
 
@@ -159,7 +149,7 @@ def get_store_url(appid):
 @app.route("/api/stats/summary")
 def summary():
     params = request.args
-    use_revenue = params.get("revenue_mode", "false").lower() == "true"
+    use_revenue = params.get("revenue_mode", "false").lower() == "true" #Mode doanh thu
     df = load_and_filter(use_revenue, params)
 
     base = {
@@ -236,7 +226,6 @@ def aggregate():
         "region": lambda: df["region"].fillna("Unknown").value_counts(),
         "price_band": lambda: df["price_band"].fillna("Unknown").value_counts(),
         "owners_tier": lambda: df["owners_tier"].fillna("Unknown").value_counts(),
-        "review_band": lambda: df["review_band"].fillna("Unknown").value_counts(),
     }
 
     if by in handlers:
@@ -267,7 +256,6 @@ def segments():
     result = {
         "price_band": df["price_band"].value_counts().to_dict(),
         "owners_tier": df["owners_tier"].value_counts().to_dict(),
-        "review_band": df["review_band"].value_counts().to_dict(),
     }
 
     # Genre summary
@@ -277,7 +265,6 @@ def segments():
         genre_summary = df_genre.groupby("genre").agg(
             count=("appid", "count"),
             avg_price=("price", "mean"),
-            avg_positive=("positive_rate", "mean"),
             revenue_proxy=("revenue_proxy", "sum")
         ).round(2).sort_values(["revenue_proxy", "count"], ascending=False).head(15)
         result["genre_summary"] = genre_summary.reset_index().to_dict("records")
@@ -287,40 +274,11 @@ def segments():
         pub_summary = df.groupby("publisher").agg(
             count=("appid", "count"),
             avg_price=("price", "mean"),
-            avg_positive=("positive_rate", "mean"),
             revenue_proxy=("revenue_proxy", "sum")
         ).round(2).sort_values(["revenue_proxy", "count"], ascending=False).head(15)
         result["publisher_summary"] = pub_summary.reset_index().to_dict("records")
 
     return jsonify(result)
-
-
-@app.route("/api/reviews")
-def reviews_summary():
-    params = request.args
-    use_revenue = params.get("revenue_mode", "false").lower() == "true"
-    df = load_and_filter(use_revenue, params)
-    top_n = int(params.get("n", 50))
-
-    if use_revenue:
-        top = df.nlargest(top_n, "revenue")
-        points = top[["appid", "name", "revenue", "copies_sold", "price", "review_score"]].copy()
-        hist_col, hist_agg = "review_score", "revenue"
-    else:
-        top = df.nlargest(top_n, "total_reviews")
-        points = top[["appid", "name", "positive_rate", "total_reviews", "owners", "price"]].copy()
-        points["positive_rate_pct"] = (points["positive_rate"] * 100).clip(0, 100)
-        hist_col, hist_agg = "positive_rate", "total_reviews"
-
-    points["store_url"] = points["appid"].apply(get_store_url)
-    points = points.to_dict("records")
-
-    values = (df[hist_col] * (100 if "rate" in hist_col else 1)).clip(0, 100)
-    bins = pd.cut(values, range(0, 101, 10), right=False)
-    hist = df.groupby(bins)[hist_agg].sum()
-    hist_dict = {f"{int(i.left)}-{int(i.right)}": float(v) for i, v in hist.items() if pd.notna(v)}
-
-    return jsonify({"points": points, "hist": hist_dict})
 
 
 @app.route("/api/revenue/analytics")
@@ -354,8 +312,6 @@ def suggest():
     n = int(request.args.get("n", 8))
     if use_revenue and "revenue" in matches.columns:
         sort_by = ["revenue"]
-    elif "total_reviews" in matches.columns:
-        sort_by = ["total_reviews", "popularity"]
     else:
         sort_by = ["popularity"] if "popularity" in matches.columns else []
     
@@ -377,11 +333,9 @@ def export_csv():
         download_name="export.csv"
     )
 
-
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat() + "Z"})
-
 
 # ----------------- Serve frontend -----------------
 @app.route("/", defaults={"path": ""})
@@ -390,7 +344,6 @@ def serve_frontend(path):
     if path and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
-
 
 # ----------------- Run -----------------
 if __name__ == "__main__":

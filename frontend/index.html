@@ -909,7 +909,13 @@ function renderCharts(top, series, agg){
   charts.push(new Chart(topChartContext, {
     type: 'bar',
     data: {
-      labels: top.map(x => x.name),
+      labels: top.map(x => {
+        // Rút ngắn tên game nếu quá dài để hiển thị đẹp hơn
+        if (x.name.length > 18) {
+          return x.name.substring(0, 15) + '...';
+        }
+        return x.name;
+      }),
       datasets: [{
         label: 'Popularity', 
         data: top.map(x => x.popularity), 
@@ -924,13 +930,18 @@ function renderCharts(top, series, agg){
       maintainAspectRatio: false,
       layout: {
         padding: {
-          bottom: 20
+          bottom: 50
         }
       },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
+            title: (tooltipItems) => {
+              // Hiển thị tên đầy đủ trong tooltip
+              const tooltipIndex = tooltipItems[0].dataIndex;
+              return top[tooltipIndex]?.name || '';
+            },
             afterBody: (tooltipItems) => {
               const tooltipIndex = tooltipItems[0].dataIndex;
               const gameItem = top[tooltipIndex];
@@ -945,11 +956,19 @@ function renderCharts(top, series, agg){
         x: {
           grid: { display: false },
           ticks: {
-            maxRotation: 45,
-            minRotation: 45,
-            font: { size: 11 },
-            padding: 10,
-            autoSkip: false
+            maxRotation: 0,
+            minRotation: 0,
+            font: { size: 10 },
+            padding: 8,
+            autoSkip: false,
+            callback: function(value, index) {
+              // Hiển thị tên ngang, rút ngắn nếu cần
+              const label = this.getLabelForValue(value);
+              if (label.length > 18) {
+                return label.substring(0, 15) + '...';
+              }
+              return label;
+            }
           }
         },
         y: {
